@@ -10,7 +10,6 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { db } from "../firebase";
 import { text } from "../lang";
-
 const defaultFoodTypes = [
   "බත් දන්සල",
   "කොට්ටු",
@@ -30,7 +29,6 @@ const defaultFoodTypes = [
   "Tea",
   "Coffee",
 ];
-
 const locations = [
   "කොළඹ",
   "ගම්පහ",
@@ -83,14 +81,11 @@ const locations = [
   "Ratnapura",
   "Kegalle",
 ];
-
 export default function AddDansal({ lang = "si" }) {
   const navigate = useNavigate();
   const t = text[lang] || text.si;
-
   const [foodTypes, setFoodTypes] = useState(defaultFoodTypes);
   const [newFood, setNewFood] = useState("");
-
   const [form, setForm] = useState({
     name: "",
     foodType: "",
@@ -101,46 +96,49 @@ export default function AddDansal({ lang = "si" }) {
     date: "",
     openTime: "",
     closeTime: "",
+    lat: "",
+    lng: "",
   });
-
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "foodTypes"), (snap) => {
       const cloudFoods = snap.docs.map((d) => d.id);
       setFoodTypes([...new Set([...defaultFoodTypes, ...cloudFoods])]);
     });
-
     return () => unsub();
   }, []);
-
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
-
   const addFoodType = async () => {
     const value = newFood.trim();
     if (!value) return;
-
     await setDoc(doc(db, "foodTypes", value), {
       name: value,
       createdAt: serverTimestamp(),
     });
-
     setForm({ ...form, foodType: value });
     setNewFood("");
   };
-
   const submit = async (e) => {
     e.preventDefault();
-
     if (form.foodType) {
       await setDoc(doc(db, "foodTypes", form.foodType), {
         name: form.foodType,
         createdAt: serverTimestamp(),
       });
     }
-
     await addDoc(collection(db, "dansals"), {
-      ...form,
+      name: form.name,
+      foodType: form.foodType,
+      location: form.location,
+      customLocation: form.customLocation,
+      exactLocation: form.exactLocation,
+      mapLink: form.mapLink,
+      date: form.date,
+      openTime: form.openTime,
+      closeTime: form.closeTime,
+      lat: form.lat ? Number(form.lat) : null,
+      lng: form.lng ? Number(form.lng) : null,
       queue: "medium",
       status: "open",
       verified: false,
@@ -151,10 +149,8 @@ export default function AddDansal({ lang = "si" }) {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-
     navigate("/");
   };
-
   return (
     <div className="page active">
       <div className="add-form">
@@ -162,11 +158,9 @@ export default function AddDansal({ lang = "si" }) {
           <Link className="detail-back" to="/">
             {t.back}
           </Link>
-
           <div className="form-section-title">{t.addTitle}</div>
           <p className="form-section-desc">{t.addDesc}</p>
         </div>
-
         <form onSubmit={submit}>
           <div className="form-grid">
             <div className="form-group form-full">
@@ -184,7 +178,6 @@ export default function AddDansal({ lang = "si" }) {
                 onChange={handleChange}
               />
             </div>
-
             <div className="form-group">
               <label className="form-label">{t.food}</label>
               <select
@@ -197,14 +190,12 @@ export default function AddDansal({ lang = "si" }) {
                 <option value="">
                   {lang === "si" ? "ආහාර වර්ගය තෝරන්න" : "Select food type"}
                 </option>
-
                 {foodTypes.map((food) => (
                   <option key={food} value={food}>
                     {food}
                   </option>
                 ))}
               </select>
-
               <div className="food-add-row">
                 <input
                   className="food-add-input"
@@ -214,7 +205,6 @@ export default function AddDansal({ lang = "si" }) {
                   value={newFood}
                   onChange={(e) => setNewFood(e.target.value)}
                 />
-
                 <button
                   type="button"
                   className="food-add-btn"
@@ -224,7 +214,6 @@ export default function AddDansal({ lang = "si" }) {
                 </button>
               </div>
             </div>
-
             <div className="form-group">
               <label className="form-label">{t.area}</label>
               <select
@@ -237,7 +226,6 @@ export default function AddDansal({ lang = "si" }) {
                 <option value="">
                   {lang === "si" ? "දිස්ත්‍රික්කය තෝරන්න" : "Select district"}
                 </option>
-
                 {locations.map((loc) => (
                   <option key={loc} value={loc}>
                     {loc}
@@ -245,12 +233,10 @@ export default function AddDansal({ lang = "si" }) {
                 ))}
               </select>
             </div>
-
             <div className="form-group form-full">
               <label className="form-label">
                 {lang === "si" ? "ගම / නගරය" : "Town / Village"}
               </label>
-
               <input
                 className="form-input"
                 name="customLocation"
@@ -263,7 +249,6 @@ export default function AddDansal({ lang = "si" }) {
                 onChange={handleChange}
               />
             </div>
-
             <div className="form-group form-full">
               <label className="form-label">{t.exact}</label>
               <input
@@ -279,7 +264,6 @@ export default function AddDansal({ lang = "si" }) {
                 onChange={handleChange}
               />
             </div>
-
             <div className="form-group form-full">
               <label className="form-label">
                 {t.map}{" "}
@@ -287,7 +271,6 @@ export default function AddDansal({ lang = "si" }) {
                   {lang === "si" ? "(විකල්ප)" : "(Optional)"}
                 </span>
               </label>
-
               <input
                 className="form-input"
                 name="mapLink"
@@ -296,7 +279,6 @@ export default function AddDansal({ lang = "si" }) {
                 onChange={handleChange}
               />
             </div>
-
             <div className="form-group">
               <label className="form-label">{t.date}</label>
               <input
@@ -308,7 +290,6 @@ export default function AddDansal({ lang = "si" }) {
                 onChange={handleChange}
               />
             </div>
-
             <div className="form-group">
               <label className="form-label">
                 {lang === "si" ? "ආරම්භ වේලාව" : "Start Time"}
@@ -322,7 +303,6 @@ export default function AddDansal({ lang = "si" }) {
                 onChange={handleChange}
               />
             </div>
-
             <div className="form-group">
               <label className="form-label">
                 {lang === "si" ? "අවසන් වේලාව" : "End Time"}{" "}
@@ -338,8 +318,31 @@ export default function AddDansal({ lang = "si" }) {
                 onChange={handleChange}
               />
             </div>
+            <div className="form-group">
+              <label className="form-label">
+                {lang === "si" ? "Latitude (විකල්ප)" : "Latitude (Optional)"}
+              </label>
+              <input
+                className="form-input"
+                name="lat"
+                placeholder="6.9271"
+                value={form.lat}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">
+                {lang === "si" ? "Longitude (විකල්ප)" : "Longitude (Optional)"}
+              </label>
+              <input
+                className="form-input"
+                name="lng"
+                placeholder="79.8612"
+                value={form.lng}
+                onChange={handleChange}
+              />
+            </div>
           </div>
-
           <button className="submit-btn">{t.submit}</button>
         </form>
       </div>

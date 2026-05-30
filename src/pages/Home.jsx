@@ -1,6 +1,6 @@
 import { timeAgo } from "../utils/timeAgo";
 import { useEffect, useState } from "react";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { collection, onSnapshot } from "firebase/firestore";
 import { Link } from "react-router-dom";
 import { db } from "../firebase";
 import { text } from "../lang";
@@ -42,41 +42,71 @@ export default function Home({ lang = "si" }) {
   const [queueFilter, setQueueFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [districtFilter, setDistrictFilter] = useState("all");
+  const [foodFilter, setFoodFilter] = useState("all");
 
   useEffect(() => {
-    const q = query(collection(db, "dansals"), orderBy("createdAt", "desc"));
+    const unsub = onSnapshot(collection(db, "dansals"), (snapshot) => {
+      const data = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
-    const unsub = onSnapshot(q, (snapshot) => {
-      setDansals(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      data.sort((a, b) => {
+        const aTime = a.createdAt?.seconds || 0;
+        const bTime = b.createdAt?.seconds || 0;
+        return bTime - aTime;
+      });
+
+      setDansals(data);
     });
 
     return () => unsub();
   }, []);
 
-  const visibleDansals = dansals.filter((d) => !d.hidden);
+  const visibleDansals = dansals.filter((d) => d.hidden !== true);
 
   const districts = [
     ...new Set(visibleDansals.map((d) => d.location).filter(Boolean)),
   ].sort();
 
+  const foodTypes = [
+    ...new Set(visibleDansals.map((d) => d.foodType).filter(Boolean)),
+  ].sort();
+
   const filtered = visibleDansals.filter((d) => {
     const timeStatus = getDansalTimeStatus(d.date, d.openTime, d.closeTime);
 
-    const matchesSearch =
-      `${d.name || ""} ${d.location || ""} ${d.customLocation || ""} ${
-        d.exactLocation || ""
-      } ${d.foodType || ""}`
-        .toLowerCase()
-        .includes(search.toLowerCase());
+    const matchesSearch = `${d.name || ""} ${d.location || ""} ${
+      d.customLocation || ""
+    } ${d.exactLocation || ""} ${d.foodType || ""}`
+      .toLowerCase()
+      .includes(search.toLowerCase());
 
     const matchesQueue = queueFilter === "all" || d.queue === queueFilter;
+
     const matchesStatus =
       statusFilter === "all" || timeStatus.type === statusFilter;
+
     const matchesDistrict =
       districtFilter === "all" || d.location === districtFilter;
 
-    return matchesSearch && matchesQueue && matchesStatus && matchesDistrict;
+    const matchesFood = foodFilter === "all" || d.foodType === foodFilter;
+
+    return (
+      matchesSearch &&
+      matchesQueue &&
+      matchesStatus &&
+      matchesDistrict &&
+      matchesFood
+    );
   });
+
+  const openNowDansals = filtered
+    .filter((d) => {
+      const status = getDansalTimeStatus(d.date, d.openTime, d.closeTime);
+      return status.type === "now";
+    })
+    .slice(0, 5);
 
   return (
     <div className="page active">
@@ -98,7 +128,7 @@ export default function Home({ lang = "si" }) {
           />
         </div>
 
-        <div className="filter-row filter-row-3">
+        <div className="filter-row filter-row-4">
           <select
             className="filter-select"
             value={districtFilter}
@@ -111,6 +141,22 @@ export default function Home({ lang = "si" }) {
             {districts.map((district) => (
               <option key={district} value={district}>
                 {district}
+              </option>
+            ))}
+          </select>
+
+          <select
+            className="filter-select"
+            value={foodFilter}
+            onChange={(e) => setFoodFilter(e.target.value)}
+          >
+            <option value="all">
+              {lang === "si" ? "සියලු ආහාර" : "All Food"}
+            </option>
+
+            {foodTypes.map((food) => (
+              <option key={food} value={food}>
+                {food}
               </option>
             ))}
           </select>
@@ -165,6 +211,16 @@ export default function Home({ lang = "si" }) {
         </div>
       </div>
 
+      <div className="home-action-row">
+  <Link to="/map" className="home-action-btn">
+    🗺️ {lang === "si" ? "සිතියමෙන් බලන්න" : "View Map"}
+  </Link>
+
+  <Link to="/route" className="home-action-btn">
+    🧭 {lang === "si" ? "මාර්ගය සැලසුම් කරන්න" : "Plan Route"}
+  </Link>
+</div>
+
       <div className="notice-box">
         <strong>
           {lang === "si" ? "වැදගත් දැනුම්දීම" : "Important Notice"}
@@ -178,23 +234,27 @@ export default function Home({ lang = "si" }) {
       </div>
 
       <div className="section-header">
-        <span className="section-title">{t.live}</span>
+        <span className="section-title">
+          {lang === "si" ? "දැන් විවෘත දන්සල්" : "Open Now Dansals"}
+        </span>
 
         <span className="count-badge">
           {lang === "si"
-            ? `දන්සල් ${filtered.length}ක්`
-            : `${filtered.length} Dansals`}
+            ? `දැන් විවෘත දන්සල් ${openNowDansals.length}ක්`
+            : `${openNowDansals.length} Open Now`}
         </span>
       </div>
 
       <div className="cards">
-        {filtered.length === 0 ? (
+        {openNowDansals.length === 0 ? (
           <div className="empty-state">
             <span className="empty-emoji">🏮</span>
-            {lang === "si" ? "දන්සලක් හමු නොවීය." : "No dansal found."}
+            {lang === "si"
+              ? "දැන් විවෘත දන්සලක් හමු නොවීය."
+              : "No open dansals found."}
           </div>
         ) : (
-          filtered.map((d) => {
+          openNowDansals.map((d) => {
             const timeStatus = getDansalTimeStatus(
               d.date,
               d.openTime,
@@ -275,6 +335,18 @@ export default function Home({ lang = "si" }) {
             );
           })
         )}
+      </div>
+
+      <div className="section-header">
+        <span className="section-title">
+          {lang === "si" ? "සියලු ගැලපෙන දන්සල්" : "All Matching Dansals"}
+        </span>
+
+        <span className="count-badge">
+          {lang === "si"
+            ? `මුළු දන්සල් ${filtered.length}ක්`
+            : `${filtered.length} Total`}
+        </span>
       </div>
 
       <footer className="creator-footer">

@@ -6,6 +6,8 @@ import DansalDetails from "./pages/DansalDetails";
 import Thorans from "./pages/Thorans";
 import AddThoran from "./pages/AddThoran";
 import ThoranDetails from "./pages/ThoranDetails";
+import DansalMap from "./pages/DansalMap";
+import RoutePlanner from "./pages/RoutePlanner";
 
 export default function App() {
   const [lang, setLang] = useState("si");
@@ -36,6 +38,10 @@ export default function App() {
 <Link to="/add-thoran" className="nav-btn">
   + {lang === "si" ? "තොරණ" : "Thoran"}
 </Link>
+
+<Link to="/map" className="nav-btn">
+  🗺️ {lang === "si" ? "සිතියම" : "Map"}
+</Link>
           </div>
         </nav>
 
@@ -46,6 +52,8 @@ export default function App() {
           <Route path="/thorans" element={<Thorans lang={lang} />} />
           <Route path="/add-thoran" element={<AddThoran lang={lang} />} />
           <Route path="/thoran/:id" element={<ThoranDetails lang={lang} />} />
+          <Route path="/map" element={<DansalMap lang={lang} />} />
+          <Route path="/route" element={<RoutePlanner lang={lang} />} />
         </Routes>
 
         <div className="lotuses" />
