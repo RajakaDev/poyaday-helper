@@ -14,6 +14,11 @@ import {
 import { Link, useParams } from "react-router-dom";
 import { db, getCurrentUserId } from "../firebase";
 import { getDansalTimeStatus } from "../utils/dansalStatus";
+import {
+  isDansalCovered,
+  markDansalCovered,
+  removeCoveredDansal,
+} from "../utils/coveredDansals";
 
 const CLOUDINARY_CLOUD_NAME = "dv0b0ygkn";
 const CLOUDINARY_UPLOAD_PRESET = "vesak_dansal_unsigned";
@@ -27,10 +32,13 @@ export default function DansalDetails({ lang = "si" }) {
   const [comments, setComments] = useState([]);
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [covered, setCovered] = useState(false);
 
   useEffect(() => {
     const unsubDansal = onSnapshot(doc(db, "dansals", id), (snap) => {
-      if (snap.exists()) setDansal({ id: snap.id, ...snap.data() });
+      if (snap.exists()) {
+        setDansal({ id: snap.id, ...snap.data() });
+      }
     });
 
     const commentsQuery = query(
@@ -58,19 +66,11 @@ export default function DansalDetails({ lang = "si" }) {
     };
   }, [id]);
 
-  const checkAutoVerify = async () => {
-    const photoSnap = await getDocs(collection(db, "dansals", id, "photos"));
-    const queueSnap = await getDocs(collection(db, "dansals", id, "queueVotes"));
-    const commentSnap = await getDocs(collection(db, "dansals", id, "comments"));
-
-    if (photoSnap.size >= 1 && queueSnap.size >= 1 && commentSnap.size >= 1) {
-      await updateDoc(doc(db, "dansals", id), {
-        verified: true,
-        verifiedType: "community",
-        updatedAt: serverTimestamp(),
-      });
+  useEffect(() => {
+    if (dansal?.id) {
+      setCovered(isDansalCovered(dansal.id));
     }
-  };
+  }, [dansal]);
 
   const shareDansal = async () => {
     if (!dansal) return;
@@ -86,7 +86,7 @@ export default function DansalDetails({ lang = "si" }) {
         await navigator.share(shareData);
       } else {
         await navigator.clipboard.writeText(window.location.href);
-        alert(lang === "si" ? "Link copied!" : "Link copied!");
+        alert("Link copied!");
       }
     } catch (err) {
       console.log(err);
@@ -136,7 +136,6 @@ export default function DansalDetails({ lang = "si" }) {
     });
 
     await calculateQueueResult();
-    await checkAutoVerify();
   };
 
   const calculateQueueResult = async () => {
@@ -194,7 +193,6 @@ export default function DansalDetails({ lang = "si" }) {
     });
 
     setComment("");
-    await checkAutoVerify();
   };
 
   const uploadMemoryPhoto = async (e) => {
@@ -237,8 +235,6 @@ export default function DansalDetails({ lang = "si" }) {
         publicId: uploaded.public_id || "",
         createdAt: serverTimestamp(),
       });
-
-      await checkAutoVerify();
     } catch (err) {
       console.error(err);
       alert(
@@ -249,6 +245,18 @@ export default function DansalDetails({ lang = "si" }) {
     } finally {
       setUploading(false);
       e.target.value = "";
+    }
+  };
+
+  const toggleCovered = () => {
+    if (!dansal) return;
+
+    if (covered) {
+      removeCoveredDansal(dansal.id);
+      setCovered(false);
+    } else {
+      markDansalCovered(dansal);
+      setCovered(true);
     }
   };
 
@@ -296,11 +304,26 @@ export default function DansalDetails({ lang = "si" }) {
 
           {dansal.mapLink && (
             <div className="detail-meta-row" style={{ marginTop: 6 }}>
-              <a className="map-link-btn" href={dansal.mapLink} target="_blank">
+              <a
+                className="map-link-btn"
+                href={dansal.mapLink}
+                target="_blank"
+                rel="noreferrer"
+              >
                 📍 {lang === "si" ? "Map එක බලන්න" : "Open Map"}
               </a>
             </div>
           )}
+
+          <button className="covered-btn" onClick={toggleCovered}>
+            {covered
+              ? lang === "si"
+                ? "✅ මම මේ දන්සලට ගියා"
+                : "✅ I Covered This Dansal"
+              : lang === "si"
+              ? "📍 මම මේ දන්සලට ගියා"
+              : "📍 I Went / Covered This Dansal"}
+          </button>
 
           <button className="share-btn" onClick={shareDansal}>
             📤 {lang === "si" ? "දන්සල බෙදාගන්න" : "Share Dansal"}
@@ -336,12 +359,15 @@ export default function DansalDetails({ lang = "si" }) {
           <button className="queue-btn qb-no" onClick={() => updateQueueVote("no")}>
             🟢 {lang === "si" ? "පෝලිම නැහැ" : "No Queue"}
           </button>
+
           <button className="queue-btn qb-short" onClick={() => updateQueueVote("short")}>
             🟡 {lang === "si" ? "කෙටි" : "Short"}
           </button>
+
           <button className="queue-btn qb-medium" onClick={() => updateQueueVote("medium")}>
             🟠 {lang === "si" ? "මධ්‍යම" : "Medium"}
           </button>
+
           <button className="queue-btn qb-long" onClick={() => updateQueueVote("long")}>
             🔴 {lang === "si" ? "දිග" : "Long"}
           </button>

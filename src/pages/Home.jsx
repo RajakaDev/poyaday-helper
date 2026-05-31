@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { db } from "../firebase";
 import { text } from "../lang";
 import { getDansalTimeStatus } from "../utils/dansalStatus";
+import { isDansalCovered, markDansalCovered } from "../utils/coveredDansals";
 
 function queueLabel(q, lang = "si") {
   const map = {

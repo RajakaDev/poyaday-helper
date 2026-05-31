@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import { useState } from "react";
+
 import Home from "./pages/Home";
 import AddDansal from "./pages/AddDansal";
 import DansalDetails from "./pages/DansalDetails";
@@ -10,9 +11,24 @@ import DansalMap from "./pages/DansalMap";
 import RoutePlanner from "./pages/RoutePlanner";
 import Analytics from "./pages/Analytics";
 import Admin from "./pages/Admin";
+import MyVesak from "./pages/MyVesak";
+import WelcomeScreen from "./components/WelcomeScreen";
 
 export default function App() {
   const [lang, setLang] = useState("si");
+
+  const [showWelcome, setShowWelcome] = useState(() => {
+    return sessionStorage.getItem("vesak_intro_seen") !== "true";
+  });
+
+  const finishWelcome = () => {
+    sessionStorage.setItem("vesak_intro_seen", "true");
+    setShowWelcome(false);
+  };
+
+  if (showWelcome) {
+    return <WelcomeScreen onFinish={finishWelcome} />;
+  }
 
   return (
     <BrowserRouter>
@@ -26,24 +42,28 @@ export default function App() {
           </Link>
 
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="nav-btn" onClick={() => setLang(lang === "si" ? "en" : "si")}>
+            <button
+              className="nav-btn"
+              onClick={() => setLang(lang === "si" ? "en" : "si")}
+            >
               {lang === "si" ? "EN" : "සිං"}
             </button>
 
             <Link to="/add" className="nav-btn">
               {lang === "si" ? "+ දන්සලක්" : "+ Add"}
             </Link>
+
             <Link to="/thorans" className="nav-btn">
-  {lang === "si" ? "තොරණ" : "Thoran"}
-</Link>
+              {lang === "si" ? "තොරණ" : "Thoran"}
+            </Link>
 
-<Link to="/add-thoran" className="nav-btn">
-  + {lang === "si" ? "තොරණ" : "Thoran"}
-</Link>
+            <Link to="/map" className="nav-btn">
+              🗺️ {lang === "si" ? "සිතියම" : "Map"}
+            </Link>
 
-<Link to="/map" className="nav-btn">
-  🗺️ {lang === "si" ? "සිතියම" : "Map"}
-</Link>
+            <Link to="/my-vesak" className="nav-btn">
+              ✨ {lang === "si" ? "මගේ වෙසක්" : "My Vesak"}
+            </Link>
           </div>
         </nav>
 
@@ -58,6 +78,7 @@ export default function App() {
           <Route path="/route" element={<RoutePlanner lang={lang} />} />
           <Route path="/analytics" element={<Analytics lang={lang} />} />
           <Route path="/admin" element={<Admin lang={lang} />} />
+          <Route path="/my-vesak" element={<MyVesak lang={lang} />} />
         </Routes>
 
         <div className="lotuses" />
@@ -65,6 +86,7 @@ export default function App() {
     </BrowserRouter>
   );
 }
+
 function Stars() {
   return (
     <div className="stars">
