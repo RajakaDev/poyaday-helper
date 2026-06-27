@@ -1,6 +1,7 @@
 import { doc, onSnapshot } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+
 import { auth, db } from "../firebase/firebase";
 import {
   addPlaceComment,
@@ -10,10 +11,12 @@ import {
   reportPlace,
   voteCrowd,
 } from "../services/placeService";
+
 import { usePlaces } from "../hooks/usePlaces";
-import { uploadImage } from "../utils/uploadImage";
 import { distanceKm } from "../utils/distance";
+import { getPlaceTimeStatus } from "../utils/placeStatus";
 import { PLACE_TYPES } from "../utils/types";
+import { uploadImage } from "../utils/uploadImage";
 
 function getTypeLabel(type) {
   return PLACE_TYPES.find((t) => t.id === type)?.name || "📍 Place";
@@ -97,6 +100,12 @@ export default function PlaceDetails({ lang = "si" }) {
     return <div className="empty-state">Loading...</div>;
   }
 
+  const status = getPlaceTimeStatus(
+    place.date,
+    place.openTime,
+    place.closeTime
+  );
+
   const googleMapsUrl =
     place.lat && place.lng
       ? `https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`
@@ -135,7 +144,6 @@ export default function PlaceDetails({ lang = "si" }) {
     if (voting) return;
 
     const userId = auth.currentUser?.uid || getGuestId();
-
     setVoting(true);
 
     try {
@@ -197,12 +205,6 @@ export default function PlaceDetails({ lang = "si" }) {
     }
   };
 
-  const status = getPlaceTimeStatus(
-    place.date,
-    place.openTime,
-    place.closeTime
-);
-
   return (
     <div className="page active page-detail">
       <div className="detail-hero">
@@ -219,13 +221,13 @@ export default function PlaceDetails({ lang = "si" }) {
           )}
         </div>
 
-        <div className="detail-status">
-    {status.label}
-</div>
+        <div className={`detail-status status-${status.type}`}>
+          {status.label}
+        </div>
 
-<div className="detail-countdown">
-    {status.message}
-</div>
+        {status.message && (
+          <div className="detail-countdown">⏳ {status.message}</div>
+        )}
 
         <div className="detail-meta">
           <div className="detail-meta-row">
@@ -235,7 +237,7 @@ export default function PlaceDetails({ lang = "si" }) {
           <div className="detail-meta-row">📌 {place.address || "-"}</div>
 
           <div className="detail-meta-row">
-            🏷️ {place.category || place.type || "place"}
+            🏷️ {place.customCategory || place.category || place.type || "place"}
           </div>
 
           {place.description && (
@@ -247,12 +249,15 @@ export default function PlaceDetails({ lang = "si" }) {
           </div>
 
           <div className="detail-meta-row">
-            🟢 Status: {place.status || "open"}
+            📅 Date: {place.date || "-"}
           </div>
 
           <div className="detail-meta-row">
-            🕒 {place.openTime || "Anytime"}{" "}
-            {place.closeTime ? `– ${place.closeTime}` : ""}
+            🕒 Opens: {place.openTime || "Anytime"}
+          </div>
+
+          <div className="detail-meta-row">
+            🕒 Closes: {place.closeTime || "-"}
           </div>
         </div>
 
@@ -268,15 +273,77 @@ export default function PlaceDetails({ lang = "si" }) {
             </a>
           )}
 
+          {place.phone && (
+            <a className="home-action-btn" href={`tel:${place.phone}`}>
+              📞 Call
+            </a>
+          )}
+
           <button className="home-action-btn" type="button" onClick={sharePlace}>
             📤 Share
           </button>
 
-          <button className="home-action-btn" type="button" onClick={toggleFavorite}>
+          <button
+            className="home-action-btn"
+            type="button"
+            onClick={toggleFavorite}
+          >
             {favorite ? "❤️ Saved" : "🤍 Save"}
           </button>
         </div>
       </div>
+
+      <div className="detail-section">
+        <div className="detail-section-title">⭐ Facilities</div>
+
+        <div className="card-tags">
+          {place.parking && <span className="tag">🚗 Parking</span>}
+          {place.toilet && <span className="tag">🚻 Toilet</span>}
+          {place.water && <span className="tag">💧 Water</span>}
+          {place.firstAid && <span className="tag">🏥 First Aid</span>}
+          {place.wheelchair && <span className="tag">🦽 Wheelchair</span>}
+          {place.charging && <span className="tag">🔌 Charging</span>}
+
+          {!place.parking &&
+            !place.toilet &&
+            !place.water &&
+            !place.firstAid &&
+            !place.wheelchair &&
+            !place.charging && (
+              <span className="small-note">No facilities added.</span>
+            )}
+        </div>
+      </div>
+
+      {(place.website || place.facebook) && (
+        <div className="detail-section">
+          <div className="detail-section-title">🔗 Links</div>
+
+          <div className="home-action-row">
+            {place.website && (
+              <a
+                className="home-action-btn"
+                href={place.website}
+                target="_blank"
+                rel="noreferrer"
+              >
+                🌐 Website
+              </a>
+            )}
+
+            {place.facebook && (
+              <a
+                className="home-action-btn"
+                href={place.facebook}
+                target="_blank"
+                rel="noreferrer"
+              >
+                📘 Facebook
+              </a>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="detail-section">
         <div className="detail-section-title">📍 Nearby Facilities</div>

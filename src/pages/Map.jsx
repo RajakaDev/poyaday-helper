@@ -80,7 +80,7 @@ export default function MapPage({ lang = "si" }) {
   const mapPlaces = useMemo(() => {
     return places
       .filter((p) => p.hidden !== true)
-      .filter((p) => p.lat && p.lng)
+      .filter((p) => p.lat !== null && p.lng !== null && p.lat !== "" && p.lng !== "")
       .map((p) => {
         const distance =
           location && p.lat && p.lng

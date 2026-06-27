@@ -1079,8 +1079,8 @@ textarea.form-input {
   }
 }
 .emoji-map-marker {
-  background: transparent;
-  border: none;
+  background: transparent !important;
+  border: none !important;
 }
 
 .emoji-map-marker div {
@@ -1089,9 +1089,9 @@ textarea.form-input {
   display: grid;
   place-items: center;
   border-radius: 999px;
-  background: white;
+  background: #ffffff;
   border: 3px solid #ffd36b;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 8px 22px rgba(0,0,0,0.35);
   font-size: 20px;
 }
 

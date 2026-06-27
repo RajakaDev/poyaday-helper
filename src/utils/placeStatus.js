@@ -2,55 +2,40 @@ export function getPlaceTimeStatus(date, openTime, closeTime) {
   if (!date || !openTime) {
     return {
       type: "unknown",
-      label: "Unknown",
-      message: "",
+      label: "⚪ Time Unknown",
+      message: "Opening time unavailable",
     };
   }
 
   const now = new Date();
-
   const open = new Date(`${date}T${openTime}:00`);
-  const close = closeTime
-    ? new Date(`${date}T${closeTime}:00`)
-    : null;
+  const close = closeTime ? new Date(`${date}T${closeTime}:00`) : null;
 
-  // Coming Soon
+  const formatDuration = (ms) => {
+    const totalMinutes = Math.max(0, Math.floor(ms / 60000));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  };
+
   if (now < open) {
-    const diff = open - now;
-
-    const hours = Math.floor(diff / 1000 / 60 / 60);
-    const mins = Math.floor((diff / 1000 / 60) % 60);
-
     return {
       type: "coming",
       label: "🔵 Coming Soon",
-      message: `Starts in ${hours}h ${mins}m`,
+      message: `Starts in ${formatDuration(open - now)}`,
     };
   }
 
-  // Open
   if (!close || now <= close) {
-    if (close) {
-      const diff = close - now;
-
-      const hours = Math.floor(diff / 1000 / 60 / 60);
-      const mins = Math.floor((diff / 1000 / 60) % 60);
-
-      return {
-        type: "open",
-        label: "🟢 Open Now",
-        message: `Closes in ${hours}h ${mins}m`,
-      };
-    }
-
     return {
       type: "open",
-      label: "🟢 Open",
-      message: "",
+      label: "🟢 Open Now",
+      message: close ? `Closes in ${formatDuration(close - now)}` : "",
     };
   }
 
-  // Closed
   return {
     type: "closed",
     label: "🔴 Closed",
