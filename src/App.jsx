@@ -5,29 +5,31 @@ import InstallAppButton from "./components/InstallAppButton";
 import SponsorPopup from "./components/SponsorPopup";
 import WelcomeScreen from "./components/WelcomeScreen";
 
-import Home from "./pages/Home";
-import AddPlace from "./pages/AddPlace";
-import AddEvent from "./pages/AddEvent";
-import PlaceDetails from "./pages/PlaceDetails";
-import MapPage from "./pages/Map";
-import RoutePlanner from "./pages/RoutePlanner";
-import EventRoutePlanner from "./pages/EventRoutePlanner";
-import Analytics from "./pages/Analytics";
-import Admin from "./pages/Admin";
-import Profile from "./pages/Profile";
-import Emergency from "./pages/Emergency";
-import LostFound from "./pages/LostFound";
-import AddLostFound from "./pages/AddLostFound";
-import LostFoundDetails from "./pages/LostFoundDetails";
-import Favorites from "./pages/Favorites";
-import CommunityFeed from "./pages/CommunityFeed";
-import SmartAssistant from "./pages/SmartAssistant";
-import RoadAlerts from "./pages/RoadAlerts";
-import AddRoadAlert from "./pages/AddRoadAlert";
-import Events from "./pages/Events";
-import Login from "./pages/Login";
-import Settings from "./pages/Settings";
+import BottomNav from "./components/BottomNav";
 import About from "./pages/About";
+import AddEvent from "./pages/AddEvent";
+import AddLostFound from "./pages/AddLostFound";
+import AddPlace from "./pages/AddPlace";
+import AddRoadAlert from "./pages/AddRoadAlert";
+import Admin from "./pages/Admin";
+import Analytics from "./pages/Analytics";
+import CommunityFeed from "./pages/CommunityFeed";
+import Emergency from "./pages/Emergency";
+import EventRoutePlanner from "./pages/EventRoutePlanner";
+import Events from "./pages/Events";
+import Favorites from "./pages/Favorites";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import LostFound from "./pages/LostFound";
+import LostFoundDetails from "./pages/LostFoundDetails";
+import MapPage from "./pages/Map";
+import More from "./pages/More";
+import PlaceDetails from "./pages/PlaceDetails";
+import Profile from "./pages/Profile";
+import RoadAlerts from "./pages/RoadAlerts";
+import RoutePlanner from "./pages/RoutePlanner";
+import Settings from "./pages/Settings";
+import SmartAssistant from "./pages/SmartAssistant";
 import SponsorRedirect from "./pages/SponsorRedirect";
 
 export default function App() {
@@ -150,7 +152,9 @@ export default function App() {
 
           <Route path="/sponsor" element={<SponsorRedirect />} />
           <Route path="*" element={<Home lang={lang} />} />
+          <Route path="/more" element={<More lang={lang} />} />
         </Routes>
+        <BottomNav />
       </div>
     </BrowserRouter>
   );

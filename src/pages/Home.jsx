@@ -3,16 +3,22 @@ import { Link } from "react-router-dom";
 
 import SponsorBanner from "../components/SponsorBanner";
 import SponsorNativeCard from "../components/SponsorNativeCard";
-
 import { useLocation } from "../hooks/useLocation";
 import { usePlaces } from "../hooks/usePlaces";
-
 import { distanceKm } from "../utils/distance";
 import { getPlaceTimeStatus } from "../utils/placeStatus";
 import { PLACE_TYPES } from "../utils/types";
 
+const MAIN_FILTERS = ["dansal", "temple", "water", "toilet"];
+
 function getTypeLabel(type) {
   return PLACE_TYPES.find((t) => t.id === type)?.name || "📍 Place";
+}
+
+function crowdText(level) {
+  if (level === "low") return "🟢 Low";
+  if (level === "high") return "🔴 Busy";
+  return "🟠 Medium";
 }
 
 export default function Home({ lang = "si" }) {
@@ -22,6 +28,7 @@ export default function Home({ lang = "si" }) {
   const [online, setOnline] = useState(navigator.onLine);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [nearbyOnly, setNearbyOnly] = useState(false);
 
   useEffect(() => {
@@ -51,7 +58,7 @@ export default function Home({ lang = "si" }) {
       .filter((p) => {
         const text = `${p.name || ""} ${p.district || ""} ${p.town || ""} ${
           p.address || ""
-        } ${p.category || ""} ${p.type || ""}`.toLowerCase();
+        } ${p.category || ""} ${p.customCategory || ""} ${p.type || ""}`.toLowerCase();
 
         const matchesSearch = text.includes(search.toLowerCase());
         const matchesType = typeFilter === "all" || p.type === typeFilter;
@@ -66,27 +73,29 @@ export default function Home({ lang = "si" }) {
       });
   }, [places, search, typeFilter, nearbyOnly, location]);
 
+  const mainFilters = PLACE_TYPES.filter((t) => MAIN_FILTERS.includes(t.id));
+  const moreFilters = PLACE_TYPES.filter((t) => !MAIN_FILTERS.includes(t.id));
+
   const handleNearby = () => {
     getLocation();
     setNearbyOnly(true);
   };
 
   return (
-    <div className="page active home-page">
-      <section className="hero home-hero">
-        <div className="hero-badge">🌕 PoyaDay Helper</div>
+    <div className="page active home-page home-clean">
+      <section className="home-clean-hero">
+        <div className="home-brand-row">
+          <div>
+            <div className="hero-badge">🌕 PoyaDay Helper</div>
+            <h1 className="home-clean-title">
+              {lang === "si" ? "අසල දන්සල් ඉක්මනින් සොයන්න" : "Find nearby dansals fast"}
+            </h1>
+          </div>
 
-        <h1 className="hero-title">
-          {lang === "si"
-            ? "ඔබ අසල වැදගත් ස්ථාන සොයන්න"
-            : "Find useful places near you"}
-        </h1>
-
-        <p className="hero-desc">
-          {lang === "si"
-            ? "දන්සල්, ජල ස්ථාන, parking, toilets, පන්සල්, first aid සහ events පහසුවෙන් සොයන්න."
-            : "Find dansals, water points, parking, toilets, temples, first aid and events easily."}
-        </p>
+          <Link to="/map" className="home-map-pill">
+            🗺 Map
+          </Link>
+        </div>
 
         <div className="search-wrap home-search">
           <span className="search-icon">🔍</span>
@@ -94,33 +103,29 @@ export default function Home({ lang = "si" }) {
             className="search-input"
             placeholder={
               lang === "si"
-                ? "නම, නගරය, ප්‍රදේශය සොයන්න..."
-                : "Search name, city, area..."
+                ? "දන්සල්, නගරය, ප්‍රදේශය සොයන්න..."
+                : "Search dansal, town, area..."
             }
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
-        <div className="home-primary-actions">
+        <div className="home-main-actions">
           <button
             className="home-action-btn primary-action"
             type="button"
             onClick={handleNearby}
           >
-            📍 {loadingLocation ? "Finding..." : lang === "si" ? "මා අසල" : "Nearby"}
+            📍 {loadingLocation ? "Finding..." : lang === "si" ? "මා අසල" : "Near Me"}
           </button>
 
-          <Link to="/assistant" className="home-action-btn">
-            🤖 Smart
+          <Link to="/route" className="home-action-btn">
+            🧭 Route
           </Link>
 
-          <Link to="/emergency" className="home-action-btn">
-            🚨 Emergency
-          </Link>
-
-          <Link to="/map" className="home-action-btn">
-            🗺️ Map
+          <Link to="/add" className="home-action-btn">
+            ➕ Add
           </Link>
         </div>
 
@@ -135,57 +140,52 @@ export default function Home({ lang = "si" }) {
         )}
       </section>
 
-      <div className="quick-grid">
-        <Link to="/add" className="quick-card">
-          ➕ <span>Add Place</span>
-        </Link>
-        <Link to="/add-event" className="quick-card">
-          🏮 <span>Add Event</span>
-        </Link>
-        <Link to="/route" className="quick-card">
-          🧭 <span>Route</span>
-        </Link>
-        <Link to="/lost-found" className="quick-card">
-          🔍 <span>Lost & Found</span>
-        </Link>
-        <Link to="/road-alerts" className="quick-card">
-          🚧 <span>Roads</span>
-        </Link>
-        <Link to="/feed" className="quick-card">
-          📢 <span>Feed</span>
-        </Link>
-        <Link to="/events" className="quick-card">
-          🌕 <span>Events</span>
-        </Link>
-        <Link to="/about" className="quick-card">
-          ℹ️ <span>About</span>
-        </Link>
-      </div>
-
-      <div className="poson-category-row home-category-row">
+      <div className="home-filter-wrap">
         <button
-          className={`poson-category-chip ${
-            typeFilter === "all" ? "active-chip" : ""
-          }`}
+          className={`poson-category-chip ${typeFilter === "all" ? "active-chip" : ""}`}
           onClick={() => setTypeFilter("all")}
           type="button"
         >
           🏛 All
         </button>
 
-        {PLACE_TYPES.map((type) => (
+        {mainFilters.map((type) => (
           <button
             key={type.id}
-            className={`poson-category-chip ${
-              typeFilter === type.id ? "active-chip" : ""
-            }`}
+            className={`poson-category-chip ${typeFilter === type.id ? "active-chip" : ""}`}
             onClick={() => setTypeFilter(type.id)}
             type="button"
           >
             {type.name}
           </button>
         ))}
+
+        <button
+          className="poson-category-chip"
+          type="button"
+          onClick={() => setShowMoreFilters((v) => !v)}
+        >
+          ☰ More
+        </button>
       </div>
+
+      {showMoreFilters && (
+        <div className="more-filter-panel">
+          {moreFilters.map((type) => (
+            <button
+              key={type.id}
+              className={`poson-category-chip ${typeFilter === type.id ? "active-chip" : ""}`}
+              onClick={() => {
+                setTypeFilter(type.id);
+                setShowMoreFilters(false);
+              }}
+              type="button"
+            >
+              {type.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {!online && (
         <div className="notice-box">
@@ -194,28 +194,12 @@ export default function Home({ lang = "si" }) {
         </div>
       )}
 
-      <div className="notice-box">
-        <strong>Beta Version</strong>
-        <p>
-          {lang === "si"
-            ? "තොරතුරු මහජනතාව විසින් එකතු කරන බැවින් යාමට පෙර නැවත පරීක්ෂා කරන්න."
-            : "Details are added by the public, so please verify before visiting."}
-        </p>
-      </div>
-
       <SponsorBanner />
 
       <div className="section-header">
         <span className="section-title">
-          {nearbyOnly
-            ? lang === "si"
-              ? "මා අසල ස්ථාන"
-              : "Nearby Places"
-            : lang === "si"
-            ? "සජීවී ස්ථාන"
-            : "Live Places"}
+          {nearbyOnly ? "Nearby Places" : typeFilter === "all" ? "Live Places" : getTypeLabel(typeFilter)}
         </span>
-
         <span className="count-badge">{visiblePlaces.length}</span>
       </div>
 
@@ -228,76 +212,70 @@ export default function Home({ lang = "si" }) {
           </div>
         ) : (
           visiblePlaces.map((p, index) => {
-            const timeStatus = getPlaceTimeStatus(
-  p.date,
-  p.openTime,
-  p.closeTime
-);
+            const timeStatus = getPlaceTimeStatus(p.date, p.openTime, p.closeTime);
+            const mapsUrl =
+              p.lat && p.lng
+                ? `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`
+                : p.mapLink || "";
 
             return (
               <div key={p.id} className="card-wrap">
                 {index === 3 && <SponsorNativeCard />}
 
-                <Link to={`/place/${p.id}`} className="dansal-card">
-                  <div className="card-top">
-                    <div>
-                      <div className="card-name">
-                        {getTypeLabel(p.type)} {p.name}
-                        {p.verified && (
-                          <span className="verified-badge">✅ Verified</span>
-                        )}
+                <div className="dansal-card home-place-card">
+                  <Link to={`/place/${p.id}`} className="home-card-main">
+                    <div className="card-top">
+                      <div>
+                        <div className="card-name">
+                          {getTypeLabel(p.type)} {p.name}
+                          {p.verified && <span className="verified-badge">✅</span>}
+                        </div>
+
+                        <div className="card-loc">
+                          📍 {p.district || "-"} {p.town ? `- ${p.town}` : ""}
+                        </div>
                       </div>
 
-                      <div className="card-loc">
-                        📍 {p.district || "-"} {p.town ? `- ${p.town}` : ""}
-                      </div>
-
-                      <div className="card-exact">{p.address || ""}</div>
+                      <span className={`status-${timeStatus.type}`}>
+                        {timeStatus.label}
+                      </span>
                     </div>
 
-                    <span className={`status-${timeStatus.type}`}>
-                      {timeStatus.label}
-                    </span>
-                  </div>
+                    <div className="home-card-meta">
+                      {timeStatus.message && <span>⏳ {timeStatus.message}</span>}
 
-                  <div className="card-tags">
-                    <span className="tag tag-food">
-                      🏷️ {p.category || p.type || "place"}
-                    </span>
+                      {p.distance !== null && p.distance !== undefined && (
+                        <span>📏 {p.distance.toFixed(1)} km</span>
+                      )}
 
-                    <span className="tag tag-food">
-                      👥 {p.crowdLevel || "medium"}
-                    </span>
+                      <span>👥 {crowdText(p.crowdLevel)}</span>
+                    </div>
 
-                    {p.lat && p.lng && <span className="tag tag-food">📍 GPS</span>}
-
-                    {p.distance !== null && p.distance !== undefined && (
+                    <div className="card-tags">
                       <span className="tag tag-food">
-                        📏 {p.distance.toFixed(1)} km
+                        🏷️ {p.customCategory || p.category || p.type || "place"}
                       </span>
+                      {p.lat && p.lng && <span className="tag tag-food">📍 GPS</span>}
+                    </div>
+                  </Link>
+
+                  <div className="home-card-actions">
+                    {mapsUrl && (
+                      <a
+                        className="home-card-btn"
+                        href={mapsUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        🧭 Navigate
+                      </a>
                     )}
+
+                    <Link className="home-card-btn" to={`/place/${p.id}`}>
+                      Details
+                    </Link>
                   </div>
-
-                 <div className="card-status">
-
-  <span className={`status-${timeStatus.type}`}>
-
-    {timeStatus.label}
-
-  </span>
-
-</div>
-
-<div className="card-time">
-
-  <span>📅 {p.date}</span>
-
-  <span>🕒 {p.openTime} - {p.closeTime}</span>
-
-  <span>⏳ {timeStatus.message}</span>
-
-</div>
-                </Link>
+                </div>
               </div>
             );
           })
