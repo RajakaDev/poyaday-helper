@@ -1,50 +1,59 @@
-export function getPlaceTimeStatus(openTime, closeTime) {
-  if (!openTime || !closeTime) {
+export function getPlaceTimeStatus(date, openTime, closeTime) {
+  if (!date || !openTime) {
     return {
       type: "unknown",
       label: "Unknown",
-      message: "Opening time unavailable",
+      message: "",
     };
   }
 
   const now = new Date();
 
-  const [oh, om] = openTime.split(":").map(Number);
-  const [ch, cm] = closeTime.split(":").map(Number);
+  const open = new Date(`${date}T${openTime}:00`);
+  const close = closeTime
+    ? new Date(`${date}T${closeTime}:00`)
+    : null;
 
-  const open = new Date(now);
-  open.setHours(oh, om, 0, 0);
-
-  const close = new Date(now);
-  close.setHours(ch, cm, 0, 0);
-
+  // Coming Soon
   if (now < open) {
-    const mins = Math.floor((open - now) / 60000);
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
+    const diff = open - now;
+
+    const hours = Math.floor(diff / 1000 / 60 / 60);
+    const mins = Math.floor((diff / 1000 / 60) % 60);
 
     return {
-      type: "soon",
-      label: "Starts Soon",
-      message: `Starts in ${h}h ${m}m`,
+      type: "coming",
+      label: "🔵 Coming Soon",
+      message: `Starts in ${hours}h ${mins}m`,
     };
   }
 
-  if (now >= open && now <= close) {
-    const mins = Math.floor((close - now) / 60000);
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
+  // Open
+  if (!close || now <= close) {
+    if (close) {
+      const diff = close - now;
+
+      const hours = Math.floor(diff / 1000 / 60 / 60);
+      const mins = Math.floor((diff / 1000 / 60) % 60);
+
+      return {
+        type: "open",
+        label: "🟢 Open Now",
+        message: `Closes in ${hours}h ${mins}m`,
+      };
+    }
 
     return {
       type: "open",
-      label: "Open Now",
-      message: `Closes in ${h}h ${m}m`,
+      label: "🟢 Open",
+      message: "",
     };
   }
 
+  // Closed
   return {
     type: "closed",
-    label: "Closed",
-    message: "Today's session ended",
+    label: "🔴 Closed",
+    message: "Finished",
   };
 }

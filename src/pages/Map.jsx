@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
+import { useEffect, useMemo, useState } from "react";
+import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
+import { Link } from "react-router-dom";
 
-import { usePlaces } from "../hooks/usePlaces";
+import { useLiveLocation } from "../hooks/useLiveLocation";
 import { useLocation } from "../hooks/useLocation";
+import { usePlaces } from "../hooks/usePlaces";
 import { distanceKm } from "../utils/distance";
 import { getPlaceTimeStatus } from "../utils/placeStatus";
 import { PLACE_TYPES } from "../utils/types";
@@ -46,7 +47,12 @@ const userIcon = L.divIcon({
   iconSize: [30, 30],
   iconAnchor: [15, 15],
 });
-
+const liveUserIcon = L.divIcon({
+  className: "live-user-marker",
+  html: "<div>👤</div>",
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+});
 function FlyToLocation({ location }) {
   const map = useMap();
 
@@ -103,6 +109,7 @@ export default function MapPage({ lang = "si" }) {
   const navigateUrl = selectedPlace
     ? `https://www.google.com/maps/dir/?api=1&destination=${selectedPlace.lat},${selectedPlace.lng}`
     : "";
+    const { liveUsers, sharing, setSharing } = useLiveLocation();
 
   return (
     <div className="page active">
@@ -152,6 +159,14 @@ export default function MapPage({ lang = "si" }) {
           <button className="gps-btn" type="button" onClick={getLocation}>
             📍 {loadingLocation ? "Finding..." : "My Location"}
           </button>
+
+          <button
+  className="home-action-btn"
+  type="button"
+  onClick={() => setSharing(!sharing)}
+>
+  {sharing ? "📍 Live ON" : "📍 Live OFF"}
+</button>
 
           <Link className="home-action-btn" to="/add">
             ➕ Add Place
@@ -223,6 +238,19 @@ export default function MapPage({ lang = "si" }) {
                 </Marker>
               );
             })}
+            {liveUsers.map((user) => (
+  <Marker
+    key={user.id}
+    position={[Number(user.lat), Number(user.lng)]}
+    icon={liveUserIcon}
+  >
+    <Popup>
+      👤 Anonymous User
+      <br />
+      Active nearby
+    </Popup>
+  </Marker>
+))}
           </MapContainer>
         )}
       </div>

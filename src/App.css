@@ -1138,3 +1138,82 @@ textarea.form-input {
   font-weight: 900;
   cursor: pointer;
 }
+.food-add-row,
+.facility-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.food-add-row {
+  grid-template-columns: 1fr auto;
+}
+
+.facility-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.facility-chip {
+  min-height: 46px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.07);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.facility-chip input {
+  width: 18px;
+  height: 18px;
+}
+
+@media (max-width: 700px) {
+  .food-add-row {
+    grid-template-columns: 1fr;
+  }
+}
+.live-user-marker {
+  background: transparent;
+  border: none;
+}
+
+.live-user-marker div {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(89, 214, 140, 0.95);
+  border: 2px solid white;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+.status-coming{
+    color:#4da3ff;
+    font-weight:700;
+}
+
+.status-open{
+    color:#33cc66;
+    font-weight:700;
+}
+
+.status-closed{
+    color:#ff5252;
+    font-weight:700;
+}
+
+.card-status{
+    margin-top:8px;
+    margin-bottom:8px;
+}
+
+.card-time{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    color:#ddd;
+    font-size:14px;
+}

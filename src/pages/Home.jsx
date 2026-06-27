@@ -228,7 +228,11 @@ export default function Home({ lang = "si" }) {
           </div>
         ) : (
           visiblePlaces.map((p, index) => {
-            const timeStatus = getPlaceTimeStatus(p.openTime, p.closeTime);
+            const timeStatus = getPlaceTimeStatus(
+  p.date,
+  p.openTime,
+  p.closeTime
+);
 
             return (
               <div key={p.id} className="card-wrap">
@@ -274,11 +278,25 @@ export default function Home({ lang = "si" }) {
                     )}
                   </div>
 
-                  <div className="card-time">
-                    <span>🕒 Opens: {p.openTime || "Anytime"}</span>
-                    <span>Closes: {p.closeTime || "-"}</span>
-                    <span>⏳ {timeStatus.message}</span>
-                  </div>
+                 <div className="card-status">
+
+  <span className={`status-${timeStatus.type}`}>
+
+    {timeStatus.label}
+
+  </span>
+
+</div>
+
+<div className="card-time">
+
+  <span>📅 {p.date}</span>
+
+  <span>🕒 {p.openTime} - {p.closeTime}</span>
+
+  <span>⏳ {timeStatus.message}</span>
+
+</div>
                 </Link>
               </div>
             );

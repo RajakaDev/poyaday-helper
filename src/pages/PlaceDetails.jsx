@@ -197,6 +197,12 @@ export default function PlaceDetails({ lang = "si" }) {
     }
   };
 
+  const status = getPlaceTimeStatus(
+    place.date,
+    place.openTime,
+    place.closeTime
+);
+
   return (
     <div className="page active page-detail">
       <div className="detail-hero">
@@ -212,6 +218,14 @@ export default function PlaceDetails({ lang = "si" }) {
             </span>
           )}
         </div>
+
+        <div className="detail-status">
+    {status.label}
+</div>
+
+<div className="detail-countdown">
+    {status.message}
+</div>
 
         <div className="detail-meta">
           <div className="detail-meta-row">

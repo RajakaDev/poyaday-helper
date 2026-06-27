@@ -2,36 +2,12 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { addPlace } from "../services/placeService";
 import { PLACE_TYPES } from "../utils/types";
+import { getAllFoodTypes, saveCustomFoodType } from "../utils/foodTypes";
 
 const DISTRICTS = [
-  "Anuradhapura",
-  "Mihintale",
-  "Polonnaruwa",
-  "Kurunegala",
-  "Dambulla",
-  "Colombo",
-  "Gampaha",
-  "Kalutara",
-  "Kandy",
-  "Matale",
-  "Galle",
-  "Matara",
-  "Ratnapura",
-  "Kegalle",
-  "Badulla",
-];
-
-const DANSAL_CATEGORIES = [
-  "Rice",
-  "Noodles",
-  "Kottu",
-  "Tea",
-  "Coffee",
-  "Ice Cream",
-  "Drink",
-  "Soup",
-  "Bread",
-  "Other",
+  "Anuradhapura", "Mihintale", "Polonnaruwa", "Kurunegala", "Dambulla",
+  "Colombo", "Gampaha", "Kalutara", "Kandy", "Matale",
+  "Galle", "Matara", "Ratnapura", "Kegalle", "Badulla",
 ];
 
 function extractLatLngFromMapLink(url) {
@@ -68,11 +44,15 @@ export default function AddPlace({ lang = "si" }) {
   const navigate = useNavigate();
 
   const [submitting, setSubmitting] = useState(false);
+  const [foodTypes, setFoodTypes] = useState(getAllFoodTypes());
+  const [showCustomFood, setShowCustomFood] = useState(false);
+  const [customFood, setCustomFood] = useState("");
 
   const [form, setForm] = useState({
     name: "",
     type: "dansal",
     category: "",
+    customCategory: "",
     district: "",
     town: "",
     address: "",
@@ -83,27 +63,43 @@ export default function AddPlace({ lang = "si" }) {
     closeTime: "",
     lat: "",
     lng: "",
+    phone: "",
+    website: "",
+    facebook: "",
+    parking: false,
+    toilet: false,
+    water: false,
+    firstAid: false,
+    wheelchair: false,
+    charging: false,
   });
 
   const selectedType = PLACE_TYPES.find((t) => t.id === form.type);
 
+  const updateForm = (name, value) => {
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
 
-    setForm((prev) => {
-      if (name === "type") {
-        return {
-          ...prev,
-          type: value,
-          category: value === "dansal" ? "" : value,
-        };
-      }
+    if (type === "checkbox") {
+      updateForm(name, checked);
+      return;
+    }
 
-      return {
+    if (name === "type") {
+      setForm((prev) => ({
         ...prev,
-        [name]: value,
-      };
-    });
+        type: value,
+        category: value === "dansal" ? "" : value,
+        customCategory: "",
+      }));
+      setShowCustomFood(false);
+      return;
+    }
+
+    updateForm(name, value);
   };
 
   const handleMapLinkChange = (e) => {
@@ -116,6 +112,23 @@ export default function AddPlace({ lang = "si" }) {
       lat: coords ? coords.lat : prev.lat,
       lng: coords ? coords.lng : prev.lng,
     }));
+  };
+
+  const addCustomFood = () => {
+    const value = customFood.trim();
+    if (!value) return;
+
+    saveCustomFoodType(value);
+    setFoodTypes(getAllFoodTypes());
+
+    setForm((prev) => ({
+      ...prev,
+      category: value.toLowerCase(),
+      customCategory: value,
+    }));
+
+    setCustomFood("");
+    setShowCustomFood(false);
   };
 
   const useMyLocation = () => {
@@ -143,11 +156,7 @@ export default function AddPlace({ lang = "si" }) {
         alert(lang === "si" ? "GPS ස්ථානය එකතු වුණා" : "GPS location added");
       },
       () => {
-        alert(
-          lang === "si"
-            ? "GPS permission ලබාදෙන්න."
-            : "Please allow GPS permission."
-        );
+        alert(lang === "si" ? "GPS permission ලබාදෙන්න." : "Please allow GPS permission.");
       },
       {
         enableHighAccuracy: true,
@@ -161,17 +170,8 @@ export default function AddPlace({ lang = "si" }) {
     e.preventDefault();
     if (submitting) return;
 
-    if (
-      !form.name.trim() ||
-      !form.type ||
-      !form.district ||
-      !form.address.trim()
-    ) {
-      alert(
-        lang === "si"
-          ? "අනිවාර්ය තොරතුරු පුරවන්න."
-          : "Please fill required fields."
-      );
+    if (!form.name.trim() || !form.type || !form.district || !form.address.trim()) {
+      alert(lang === "si" ? "අනිවාර්ය තොරතුරු පුරවන්න." : "Please fill required fields.");
       return;
     }
 
@@ -195,6 +195,7 @@ export default function AddPlace({ lang = "si" }) {
         name: form.name.trim(),
         type: form.type,
         category: form.category || form.type,
+        customCategory: form.customCategory || "",
 
         district: form.district,
         town: form.town.trim(),
@@ -208,16 +209,23 @@ export default function AddPlace({ lang = "si" }) {
 
         lat: form.lat ? Number(form.lat) : null,
         lng: form.lng ? Number(form.lng) : null,
+
+        phone: form.phone.trim(),
+        website: form.website.trim(),
+        facebook: form.facebook.trim(),
+
+        parking: form.parking,
+        toilet: form.toilet,
+        water: form.water,
+        firstAid: form.firstAid,
+        wheelchair: form.wheelchair,
+        charging: form.charging,
       });
 
       navigate("/");
     } catch (err) {
       console.error(err);
-      alert(
-        lang === "si"
-          ? "Save වුණේ නැහැ. නැවත උත්සාහ කරන්න."
-          : "Save failed. Please try again."
-      );
+      alert(lang === "si" ? "Save වුණේ නැහැ. නැවත උත්සාහ කරන්න." : "Save failed. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -226,29 +234,24 @@ export default function AddPlace({ lang = "si" }) {
   return (
     <div className="page active">
       <div className="add-form">
-        <div style={{ paddingTop: 8 }}>
-          <Link className="detail-back" to="/">
-            ← {lang === "si" ? "ආපසු" : "Back"}
-          </Link>
+        <Link className="detail-back" to="/">
+          ← {lang === "si" ? "ආපසු" : "Back"}
+        </Link>
 
-          <div className="form-section-title">
-            {lang === "si" ? "ස්ථානයක් එක් කරන්න" : "Add Place"}
-          </div>
-
-          <p className="form-section-desc">
-            {lang === "si"
-              ? "දන්සල්, ජල ස්ථාන, parking, toilets, temples, first aid සහ events එකතු කරන්න."
-              : "Add dansals, water points, parking, toilets, temples, first aid and events."}
-          </p>
+        <div className="form-section-title">
+          {lang === "si" ? "ස්ථානයක් එක් කරන්න" : "Add Place"}
         </div>
+
+        <p className="form-section-desc">
+          {lang === "si"
+            ? "දන්සල්, ජල ස්ථාන, parking, toilets, temples, first aid සහ events එකතු කරන්න."
+            : "Add dansals, water points, parking, toilets, temples, first aid and events."}
+        </p>
 
         <form onSubmit={submit}>
           <div className="form-grid">
             <div className="form-group form-full">
-              <label className="form-label">
-                {lang === "si" ? "ස්ථානයේ නම" : "Place Name"}
-              </label>
-
+              <label className="form-label">Place Name *</label>
               <input
                 className="form-input"
                 name="name"
@@ -261,10 +264,7 @@ export default function AddPlace({ lang = "si" }) {
             </div>
 
             <div className="form-group">
-              <label className="form-label">
-                {lang === "si" ? "ස්ථාන වර්ගය" : "Place Type"}
-              </label>
-
+              <label className="form-label">Place Type *</label>
               <select
                 className="form-select"
                 name="type"
@@ -283,34 +283,45 @@ export default function AddPlace({ lang = "si" }) {
 
             {form.type === "dansal" ? (
               <div className="form-group">
-                <label className="form-label">
-                  {lang === "si" ? "දන්සල් වර්ගය" : "Dansal Category"}
-                </label>
-
+                <label className="form-label">Dansal Food Type</label>
                 <select
                   className="form-select"
-                  name="category"
                   disabled={submitting}
                   value={form.category}
-                  onChange={handleChange}
-                >
-                  <option value="">
-                    {lang === "si" ? "වර්ගය තෝරන්න" : "Select category"}
-                  </option>
+                  onChange={(e) => {
+                    if (e.target.value === "other") {
+                      setShowCustomFood(true);
+                      return;
+                    }
 
-                  {DANSAL_CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat.toLowerCase()}>
-                      {cat}
+                    setForm((prev) => ({
+                      ...prev,
+                      category: e.target.value,
+                      customCategory: "",
+                    }));
+                  }}
+                >
+                  <option value="">Select food type</option>
+                  {foodTypes.map((food) => (
+                    <option key={food} value={food.toLowerCase()}>
+                      {food}
                     </option>
                   ))}
                 </select>
+
+                <button
+                  className="home-action-btn"
+                  type="button"
+                  style={{ marginTop: 8 }}
+                  disabled={submitting}
+                  onClick={() => setShowCustomFood(true)}
+                >
+                  ➕ Add New Food Type
+                </button>
               </div>
             ) : (
               <div className="form-group">
-                <label className="form-label">
-                  {lang === "si" ? "තෝරාගත් වර්ගය" : "Selected Type"}
-                </label>
-
+                <label className="form-label">Selected Type</label>
                 <input
                   className="form-input"
                   value={selectedType?.name || form.type}
@@ -320,11 +331,31 @@ export default function AddPlace({ lang = "si" }) {
               </div>
             )}
 
-            <div className="form-group">
-              <label className="form-label">
-                {lang === "si" ? "ප්‍රදේශය / දිස්ත්‍රික්කය" : "District / Area"}
-              </label>
+            {showCustomFood && (
+              <div className="form-group form-full">
+                <label className="form-label">New Food Type</label>
+                <div className="food-add-row">
+                  <input
+                    className="form-input"
+                    placeholder="Example: Kottu"
+                    value={customFood}
+                    disabled={submitting}
+                    onChange={(e) => setCustomFood(e.target.value)}
+                  />
+                  <button
+                    className="home-action-btn"
+                    type="button"
+                    disabled={submitting}
+                    onClick={addCustomFood}
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            )}
 
+            <div className="form-group">
+              <label className="form-label">District / Area *</label>
               <select
                 className="form-select"
                 name="district"
@@ -333,10 +364,7 @@ export default function AddPlace({ lang = "si" }) {
                 value={form.district}
                 onChange={handleChange}
               >
-                <option value="">
-                  {lang === "si" ? "ප්‍රදේශය තෝරන්න" : "Select area"}
-                </option>
-
+                <option value="">Select area</option>
                 {DISTRICTS.map((district) => (
                   <option key={district} value={district}>
                     {district}
@@ -346,10 +374,7 @@ export default function AddPlace({ lang = "si" }) {
             </div>
 
             <div className="form-group">
-              <label className="form-label">
-                {lang === "si" ? "නගරය / ගම" : "Town / Village"}
-              </label>
-
+              <label className="form-label">Town / Village</label>
               <input
                 className="form-input"
                 name="town"
@@ -361,10 +386,7 @@ export default function AddPlace({ lang = "si" }) {
             </div>
 
             <div className="form-group form-full">
-              <label className="form-label">
-                {lang === "si" ? "නිශ්චිත ස්ථානය" : "Exact Address"}
-              </label>
-
+              <label className="form-label">Exact Address *</label>
               <input
                 className="form-input"
                 name="address"
@@ -377,10 +399,7 @@ export default function AddPlace({ lang = "si" }) {
             </div>
 
             <div className="form-group form-full">
-              <label className="form-label">
-                {lang === "si" ? "විස්තර" : "Description"}
-              </label>
-
+              <label className="form-label">Description</label>
               <textarea
                 className="form-input"
                 name="description"
@@ -394,7 +413,6 @@ export default function AddPlace({ lang = "si" }) {
 
             <div className="form-group form-full">
               <label className="form-label">Google Maps Link</label>
-
               <input
                 className="form-input"
                 name="mapLink"
@@ -403,19 +421,13 @@ export default function AddPlace({ lang = "si" }) {
                 value={form.mapLink}
                 onChange={handleMapLinkChange}
               />
-
               <p className="small-note">
-                {lang === "si"
-                  ? "Map link එකේ coordinates තිබේ නම් latitude/longitude ස්වයංක්‍රීයව පිරේ."
-                  : "If the map link contains coordinates, latitude/longitude will be filled automatically."}
+                If the map link contains coordinates, latitude/longitude will be filled automatically.
               </p>
             </div>
 
             <div className="form-group">
-              <label className="form-label">
-                {lang === "si" ? "දිනය" : "Date"}
-              </label>
-
+              <label className="form-label">Date</label>
               <input
                 className="form-input"
                 name="date"
@@ -427,10 +439,7 @@ export default function AddPlace({ lang = "si" }) {
             </div>
 
             <div className="form-group">
-              <label className="form-label">
-                {lang === "si" ? "ආරම්භ වේලාව" : "Start Time"}
-              </label>
-
+              <label className="form-label">Start Time</label>
               <input
                 className="form-input"
                 name="openTime"
@@ -442,10 +451,7 @@ export default function AddPlace({ lang = "si" }) {
             </div>
 
             <div className="form-group">
-              <label className="form-label">
-                {lang === "si" ? "අවසන් වේලාව" : "End Time"}
-              </label>
-
+              <label className="form-label">End Time</label>
               <input
                 className="form-input"
                 name="closeTime"
@@ -456,32 +462,57 @@ export default function AddPlace({ lang = "si" }) {
               />
             </div>
 
+            <div className="form-group">
+              <label className="form-label">Phone</label>
+              <input
+                className="form-input"
+                name="phone"
+                disabled={submitting}
+                placeholder="0712345678"
+                value={form.phone}
+                onChange={handleChange}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Website</label>
+              <input
+                className="form-input"
+                name="website"
+                disabled={submitting}
+                placeholder="https://example.com"
+                value={form.website}
+                onChange={handleChange}
+              />
+            </div>
+
+            <div className="form-group form-full">
+              <label className="form-label">Facebook Page</label>
+              <input
+                className="form-input"
+                name="facebook"
+                disabled={submitting}
+                placeholder="https://facebook.com/..."
+                value={form.facebook}
+                onChange={handleChange}
+              />
+            </div>
+
             <div className="gps-warning form-full">
-              <strong>
-                {lang === "si"
-                  ? "GPS පිළිබඳ වැදගත් දැනුම්දීම"
-                  : "Important GPS Notice"}
-              </strong>
-
-              <p>
-                {lang === "si"
-                  ? "ඔබ මෙම ස්ථානයේ සිටිනවා නම් පමණක් GPS භාවිතා කරන්න."
-                  : "Use GPS only if you are physically at this place."}
-              </p>
-
+              <strong>Important GPS Notice</strong>
+              <p>Use GPS only if you are physically at this place.</p>
               <button
                 type="button"
                 className="gps-btn"
                 onClick={useMyLocation}
                 disabled={submitting}
               >
-                📍 {lang === "si" ? "GPS භාවිතා කරන්න" : "Use GPS"}
+                📍 Use GPS
               </button>
             </div>
 
             <div className="form-group">
               <label className="form-label">Latitude</label>
-
               <input
                 className="form-input"
                 name="lat"
@@ -495,7 +526,6 @@ export default function AddPlace({ lang = "si" }) {
 
             <div className="form-group">
               <label className="form-label">Longitude</label>
-
               <input
                 className="form-input"
                 name="lng"
@@ -506,16 +536,35 @@ export default function AddPlace({ lang = "si" }) {
                 onChange={handleChange}
               />
             </div>
+
+            <div className="form-group form-full">
+              <label className="form-label">Facilities</label>
+              <div className="facility-grid">
+                {[
+                  ["parking", "🚗 Parking"],
+                  ["toilet", "🚻 Toilet"],
+                  ["water", "💧 Water"],
+                  ["firstAid", "🏥 First Aid"],
+                  ["wheelchair", "🦽 Wheelchair"],
+                  ["charging", "🔌 Charging"],
+                ].map(([key, label]) => (
+                  <label key={key} className="facility-chip">
+                    <input
+                      type="checkbox"
+                      name={key}
+                      checked={form[key]}
+                      disabled={submitting}
+                      onChange={handleChange}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
 
           <button className="submit-btn" disabled={submitting}>
-            {submitting
-              ? lang === "si"
-                ? "Save වෙමින්..."
-                : "Saving..."
-              : lang === "si"
-              ? "Save කරන්න"
-              : "Save Place"}
+            {submitting ? "Saving..." : "Save Place"}
           </button>
         </form>
       </div>
