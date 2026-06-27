@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { usePlaces } from "../hooks/usePlaces";
-import { useLocation } from "../hooks/useLocation";
-import { PLACE_TYPES } from "../utils/types";
-import { distanceKm } from "../utils/distance";
-import { listenActivePromotions } from "../services/promotionService";
 import PromotionCard from "../components/PromotionCard";
+import SponsorBanner from "../components/SponsorBanner";
+import SponsorNativeCard from "../components/SponsorNativeCard";
+import { useLocation } from "../hooks/useLocation";
+import { usePlaces } from "../hooks/usePlaces";
+import { listenActivePromotions } from "../services/promotionService";
+import { distanceKm } from "../utils/distance";
+import { PLACE_TYPES } from "../utils/types";
 
 function getTypeLabel(type) {
   return PLACE_TYPES.find((t) => t.id === type)?.name || "📍 Place";
@@ -174,6 +176,7 @@ export default function Home({ lang = "si" }) {
             : "Details are added by the public, so please verify before visiting."}
         </p>
       </div>
+      <SponsorBanner />
 
       {promotions.length > 0 && (
         <section className="promo-section">
@@ -205,53 +208,66 @@ export default function Home({ lang = "si" }) {
       </div>
 
       <div className="cards">
-        {loading ? (
-          <div className="empty-state">Loading...</div>
-        ) : visiblePlaces.length === 0 ? (
-          <div className="empty-state">
-            {nearbyOnly ? "No places found within 10km." : "No places found."}
-          </div>
-        ) : (
-          visiblePlaces.map((p) => (
-            <Link key={p.id} to={`/place/${p.id}`} className="dansal-card">
-              <div className="card-top">
-                <div>
-                  <div className="card-name">
-                    {getTypeLabel(p.type)} {p.name}
-                    {p.verified && (
-                      <span className="verified-badge">✅ Verified</span>
-                    )}
-                  </div>
+  {loading ? (
+    <div className="empty-state">Loading...</div>
+  ) : visiblePlaces.length === 0 ? (
+    <div className="empty-state">
+      {nearbyOnly ? "No places found within 10km." : "No places found."}
+    </div>
+  ) : (
+    visiblePlaces.map((p, index) => (
+      <div key={p.id} className="card-wrap">
+        {index === 3 && <SponsorNativeCard />}
 
-                  <div className="card-loc">
-                    📍 {p.district || "-"} {p.town ? `- ${p.town}` : ""}
-                  </div>
-
-                  <div className="card-exact">{p.address || ""}</div>
-                </div>
-
-                <span className={`status-${p.status || "open"}`}>
-                  {p.status || "open"}
-                </span>
-              </div>
-
-              <div className="card-tags">
-                <span className="tag tag-food">🏷️ {p.category || p.type || "place"}</span>
-                <span className="tag tag-food">👥 {p.crowdLevel || "medium"}</span>
-                {p.lat && p.lng && <span className="tag tag-food">📍 GPS</span>}
-                {p.distance !== null && p.distance !== undefined && (
-                  <span className="tag tag-food">📏 {p.distance.toFixed(1)} km</span>
+        <Link to={`/place/${p.id}`} className="dansal-card">
+          <div className="card-top">
+            <div>
+              <div className="card-name">
+                {getTypeLabel(p.type)} {p.name}
+                {p.verified && (
+                  <span className="verified-badge">✅ Verified</span>
                 )}
               </div>
 
-              <div className="card-time">
-                <span>🕒 {p.openTime || "Anytime"}</span>
-                <span>{p.closeTime ? `– ${p.closeTime}` : ""}</span>
+              <div className="card-loc">
+                📍 {p.district || "-"} {p.town ? `- ${p.town}` : ""}
               </div>
-            </Link>
-          ))
-        )}
+
+              <div className="card-exact">{p.address || ""}</div>
+            </div>
+
+            <span className={`status-${p.status || "open"}`}>
+              {p.status || "open"}
+            </span>
+          </div>
+
+          <div className="card-tags">
+            <span className="tag tag-food">
+              🏷️ {p.category || p.type || "place"}
+            </span>
+
+            <span className="tag tag-food">
+              👥 {p.crowdLevel || "medium"}
+            </span>
+
+            {p.lat && p.lng && <span className="tag tag-food">📍 GPS</span>}
+
+            {p.distance !== null && p.distance !== undefined && (
+              <span className="tag tag-food">
+                📏 {p.distance.toFixed(1)} km
+              </span>
+            )}
+          </div>
+
+          <div className="card-time">
+            <span>🕒 {p.openTime || "Anytime"}</span>
+            <span>{p.closeTime ? `– ${p.closeTime}` : ""}</span>
+          </div>
+        </Link>
       </div>
+    ))
+  )}
+</div>
 
       <footer className="creator-footer">
         <strong>Powered by Zytrix Solution</strong>

@@ -1,13 +1,10 @@
-import {
-  signInWithPopup,
-  signOut,
-} from "firebase/auth";
+import { signInWithPopup, signOut } from "firebase/auth";
 import { auth, googleProvider } from "../firebase/firebase";
 
-export function loginWithGoogle() {
+export async function loginWithGoogle() {
   return signInWithPopup(auth, googleProvider);
 }
 
-export function logout() {
+export async function logout() {
   return signOut(auth);
 }

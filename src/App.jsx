@@ -28,6 +28,7 @@ import Events from "./pages/Events";
 import Login from "./pages/Login";
 import Settings from "./pages/Settings";
 import About from "./pages/About";
+import SponsorRedirect from "./pages/SponsorRedirect";
 
 export default function App() {
   const [lang, setLang] = useState("si");
@@ -147,6 +148,7 @@ export default function App() {
           <Route path="/settings" element={<Settings lang={lang} />} />
           <Route path="/about" element={<About lang={lang} />} />
 
+          <Route path="/sponsor" element={<SponsorRedirect />} />
           <Route path="*" element={<Home lang={lang} />} />
         </Routes>
       </div>
