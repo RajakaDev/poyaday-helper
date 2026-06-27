@@ -3,22 +3,51 @@ import { Link } from "react-router-dom";
 
 import SponsorBanner from "../components/SponsorBanner";
 import SponsorNativeCard from "../components/SponsorNativeCard";
+
 import { useLocation } from "../hooks/useLocation";
 import { usePlaces } from "../hooks/usePlaces";
+
 import { distanceKm } from "../utils/distance";
 import { getPlaceTimeStatus } from "../utils/placeStatus";
-import { PLACE_TYPES } from "../utils/types";
 
-const MAIN_FILTERS = ["dansal", "temple", "water", "toilet"];
+const DISTRICTS = [
+  "Anuradhapura",
+  "Mihintale",
+  "Colombo",
+  "Kandy",
+  "Gampaha",
+  "Kalutara",
+  "Kurunegala",
+  "Galle",
+  "Matara",
+  "Badulla",
+  "Ratnapura",
+];
 
-function getTypeLabel(type) {
-  return PLACE_TYPES.find((t) => t.id === type)?.name || "📍 Place";
-}
+const FOOD_TYPES = [
+  "rice",
+  "kottu",
+  "tea",
+  "coffee",
+  "ice cream",
+  "noodles",
+  "water",
+  "drink",
+  "soup",
+  "bread",
+];
 
 function crowdText(level) {
   if (level === "low") return "🟢 Low";
   if (level === "high") return "🔴 Busy";
   return "🟠 Medium";
+}
+
+function statusRank(status) {
+  if (status.type === "open") return 1;
+  if (status.type === "coming") return 2;
+  if (status.type === "unknown") return 3;
+  return 4;
 }
 
 export default function Home({ lang = "si" }) {
@@ -27,8 +56,9 @@ export default function Home({ lang = "si" }) {
 
   const [online, setOnline] = useState(navigator.onLine);
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [foodFilter, setFoodFilter] = useState("all");
+  const [districtFilter, setDistrictFilter] = useState("all");
+  const [openOnly, setOpenOnly] = useState(true);
   const [nearbyOnly, setNearbyOnly] = useState(false);
 
   useEffect(() => {
@@ -47,34 +77,61 @@ export default function Home({ lang = "si" }) {
   const visiblePlaces = useMemo(() => {
     return places
       .filter((p) => p.hidden !== true)
+      .filter((p) => p.type === "dansal")
       .map((p) => {
         const distance =
           location && p.lat && p.lng
             ? distanceKm(location.lat, location.lng, Number(p.lat), Number(p.lng))
             : null;
 
-        return { ...p, distance };
+        const timeStatus = getPlaceTimeStatus(p.date, p.openTime, p.closeTime);
+
+        return {
+          ...p,
+          distance,
+          timeStatus,
+        };
       })
       .filter((p) => {
         const text = `${p.name || ""} ${p.district || ""} ${p.town || ""} ${
           p.address || ""
-        } ${p.category || ""} ${p.customCategory || ""} ${p.type || ""}`.toLowerCase();
+        } ${p.category || ""} ${p.customCategory || ""}`.toLowerCase();
 
         const matchesSearch = text.includes(search.toLowerCase());
-        const matchesType = typeFilter === "all" || p.type === typeFilter;
+
+        const matchesFood =
+          foodFilter === "all" ||
+          String(p.category || "").toLowerCase() === foodFilter ||
+          String(p.customCategory || "").toLowerCase() === foodFilter;
+
+        const matchesDistrict =
+          districtFilter === "all" || p.district === districtFilter;
+
         const matchesNearby =
           !nearbyOnly || (p.distance !== null && p.distance <= 10);
 
-        return matchesSearch && matchesType && matchesNearby;
+        const matchesOpen =
+          !openOnly ||
+          p.timeStatus.type === "open" ||
+          p.timeStatus.type === "coming";
+
+        return (
+          matchesSearch &&
+          matchesFood &&
+          matchesDistrict &&
+          matchesNearby &&
+          matchesOpen
+        );
       })
       .sort((a, b) => {
-        if (!location) return 0;
-        return (a.distance ?? 99999) - (b.distance ?? 99999);
-      });
-  }, [places, search, typeFilter, nearbyOnly, location]);
+        const statusSort = statusRank(a.timeStatus) - statusRank(b.timeStatus);
+        if (statusSort !== 0) return statusSort;
 
-  const mainFilters = PLACE_TYPES.filter((t) => MAIN_FILTERS.includes(t.id));
-  const moreFilters = PLACE_TYPES.filter((t) => !MAIN_FILTERS.includes(t.id));
+        if (location) return (a.distance ?? 99999) - (b.distance ?? 99999);
+
+        return 0;
+      });
+  }, [places, search, foodFilter, districtFilter, nearbyOnly, openOnly, location]);
 
   const handleNearby = () => {
     getLocation();
@@ -82,22 +139,36 @@ export default function Home({ lang = "si" }) {
   };
 
   return (
-    <div className="page active home-page home-clean">
-      <section className="home-clean-hero">
-        <div className="home-brand-row">
+    <div className="page active home-page simple-home">
+      <section className="simple-home-header">
+        <div className="simple-top">
           <div>
-            <div className="hero-badge">🌕 PoyaDay Helper</div>
-            <h1 className="home-clean-title">
+            <div className="simple-logo">🌕 PoyaDay Helper</div>
+            <div className="simple-subtitle">
               {lang === "si" ? "අසල දන්සල් ඉක්මනින් සොයන්න" : "Find nearby dansals fast"}
-            </h1>
+            </div>
           </div>
 
-          <Link to="/map" className="home-map-pill">
-            🗺 Map
-          </Link>
+          <div className="simple-header-actions">
+            <button className="mini-action" type="button">
+              {lang === "si" ? "EN" : "සිං"}
+            </button>
+
+            <Link to="/map" className="mini-action">
+              🗺️ Map
+            </Link>
+
+            <Link to="/assistant" className="mini-action">
+              🤖 AI
+            </Link>
+
+            <Link to="/road-alerts" className="mini-action">
+              🚧 Roads
+            </Link>
+          </div>
         </div>
 
-        <div className="search-wrap home-search">
+        <div className="search-wrap simple-search">
           <span className="search-icon">🔍</span>
           <input
             className="search-input"
@@ -111,23 +182,9 @@ export default function Home({ lang = "si" }) {
           />
         </div>
 
-        <div className="home-main-actions">
-          <button
-            className="home-action-btn primary-action"
-            type="button"
-            onClick={handleNearby}
-          >
-            📍 {loadingLocation ? "Finding..." : lang === "si" ? "මා අසල" : "Near Me"}
-          </button>
-
-          <Link to="/route" className="home-action-btn">
-            🧭 Route
-          </Link>
-
-          <Link to="/add" className="home-action-btn">
-            ➕ Add
-          </Link>
-        </div>
+        <button className="nearby-wide-btn" type="button" onClick={handleNearby}>
+          📍 {loadingLocation ? "Finding..." : lang === "si" ? "මා අසල දන්සල්" : "Nearby Dansals"}
+        </button>
 
         {nearbyOnly && (
           <button
@@ -135,57 +192,55 @@ export default function Home({ lang = "si" }) {
             type="button"
             onClick={() => setNearbyOnly(false)}
           >
-            ✕ {lang === "si" ? "Nearby ඉවත් කරන්න" : "Clear Nearby"}
+            ✕ Clear Nearby
           </button>
         )}
       </section>
 
-      <div className="home-filter-wrap">
-        <button
-          className={`poson-category-chip ${typeFilter === "all" ? "active-chip" : ""}`}
-          onClick={() => setTypeFilter("all")}
-          type="button"
-        >
-          🏛 All
-        </button>
-
-        {mainFilters.map((type) => (
-          <button
-            key={type.id}
-            className={`poson-category-chip ${typeFilter === type.id ? "active-chip" : ""}`}
-            onClick={() => setTypeFilter(type.id)}
-            type="button"
-          >
-            {type.name}
-          </button>
-        ))}
-
-        <button
-          className="poson-category-chip"
-          type="button"
-          onClick={() => setShowMoreFilters((v) => !v)}
-        >
-          ☰ More
-        </button>
-      </div>
-
-      {showMoreFilters && (
-        <div className="more-filter-panel">
-          {moreFilters.map((type) => (
-            <button
-              key={type.id}
-              className={`poson-category-chip ${typeFilter === type.id ? "active-chip" : ""}`}
-              onClick={() => {
-                setTypeFilter(type.id);
-                setShowMoreFilters(false);
-              }}
-              type="button"
+      <section className="simple-filter-card">
+        <div className="filter-compact-grid">
+          <div className="form-group">
+            <label className="form-label">🍚 Food Type</label>
+            <select
+              className="form-select"
+              value={foodFilter}
+              onChange={(e) => setFoodFilter(e.target.value)}
             >
-              {type.name}
-            </button>
-          ))}
+              <option value="all">All Foods</option>
+              {FOOD_TYPES.map((food) => (
+                <option key={food} value={food}>
+                  {food}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">📍 District</label>
+            <select
+              className="form-select"
+              value={districtFilter}
+              onChange={(e) => setDistrictFilter(e.target.value)}
+            >
+              <option value="all">All Districts</option>
+              {DISTRICTS.map((district) => (
+                <option key={district} value={district}>
+                  {district}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-      )}
+
+        <label className="open-toggle">
+          <input
+            type="checkbox"
+            checked={openOnly}
+            onChange={(e) => setOpenOnly(e.target.checked)}
+          />
+          <span>🟢 Show Open / Coming Soon only</span>
+        </label>
+      </section>
 
       {!online && (
         <div className="notice-box">
@@ -198,21 +253,20 @@ export default function Home({ lang = "si" }) {
 
       <div className="section-header">
         <span className="section-title">
-          {nearbyOnly ? "Nearby Places" : typeFilter === "all" ? "Live Places" : getTypeLabel(typeFilter)}
+          🔥 {nearbyOnly ? "Nearby Open Dansals" : "Dansals"}
         </span>
         <span className="count-badge">{visiblePlaces.length}</span>
       </div>
 
-      <div className="cards">
+      <div className="cards simple-cards">
         {loading ? (
           <div className="empty-state">Loading...</div>
         ) : visiblePlaces.length === 0 ? (
           <div className="empty-state">
-            {nearbyOnly ? "No places found within 10km." : "No places found."}
+            No dansals found. Try changing filters.
           </div>
         ) : (
           visiblePlaces.map((p, index) => {
-            const timeStatus = getPlaceTimeStatus(p.date, p.openTime, p.closeTime);
             const mapsUrl =
               p.lat && p.lng
                 ? `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`
@@ -220,14 +274,14 @@ export default function Home({ lang = "si" }) {
 
             return (
               <div key={p.id} className="card-wrap">
-                {index === 3 && <SponsorNativeCard />}
+                {index === 4 && <SponsorNativeCard />}
 
-                <div className="dansal-card home-place-card">
-                  <Link to={`/place/${p.id}`} className="home-card-main">
-                    <div className="card-top">
+                <div className="dansal-card simple-dansal-card">
+                  <Link to={`/place/${p.id}`} className="simple-card-main">
+                    <div className="simple-card-title-row">
                       <div>
                         <div className="card-name">
-                          {getTypeLabel(p.type)} {p.name}
+                          🍚 {p.name}
                           {p.verified && <span className="verified-badge">✅</span>}
                         </div>
 
@@ -236,30 +290,30 @@ export default function Home({ lang = "si" }) {
                         </div>
                       </div>
 
-                      <span className={`status-${timeStatus.type}`}>
-                        {timeStatus.label}
+                      <span className={`status-${p.timeStatus.type}`}>
+                        {p.timeStatus.label}
                       </span>
                     </div>
 
-                    <div className="home-card-meta">
-                      {timeStatus.message && <span>⏳ {timeStatus.message}</span>}
+                    <div className="simple-card-info">
+                      {p.timeStatus.message && <span>⏳ {p.timeStatus.message}</span>}
+
+                      <span>👥 {crowdText(p.crowdLevel)}</span>
 
                       {p.distance !== null && p.distance !== undefined && (
                         <span>📏 {p.distance.toFixed(1)} km</span>
                       )}
-
-                      <span>👥 {crowdText(p.crowdLevel)}</span>
                     </div>
 
                     <div className="card-tags">
-                      <span className="tag tag-food">
-                        🏷️ {p.customCategory || p.category || p.type || "place"}
+                      <span className="tag">
+                        🏷️ {p.customCategory || p.category || "dansal"}
                       </span>
-                      {p.lat && p.lng && <span className="tag tag-food">📍 GPS</span>}
+                      {p.lat && p.lng && <span className="tag">📍 GPS</span>}
                     </div>
                   </Link>
 
-                  <div className="home-card-actions">
+                  <div className="simple-card-actions">
                     {mapsUrl && (
                       <a
                         className="home-card-btn"
