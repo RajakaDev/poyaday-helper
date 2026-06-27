@@ -10,7 +10,6 @@ import { AppProvider } from "./context/AppContext";
 
 import "./index.css";
 import "./App.css";
-import "./app.css";
 import "./styles/vesak.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
