@@ -1,0 +1,30 @@
+export const LOST_FOUND_TYPES = [
+  { id: "phone", label: "📱 Phone" },
+  { id: "bag", label: "🎒 Bag" },
+  { id: "wallet", label: "👛 Wallet" },
+  { id: "bankCard", label: "💳 Bank Card" },
+  { id: "idCard", label: "🪪 ID Card" },
+  { id: "passport", label: "📕 Passport" },
+  { id: "keys", label: "🔑 Keys" },
+  { id: "watch", label: "⌚ Watch" },
+  { id: "jewelry", label: "💍 Jewelry" },
+  { id: "glasses", label: "👓 Glasses" },
+  { id: "child", label: "🧒 Child" },
+  { id: "clothes", label: "🧥 Clothes" },
+  { id: "camera", label: "📷 Camera" },
+  { id: "laptop", label: "💻 Laptop" },
+  { id: "pet", label: "🐕 Pet" },
+  { id: "other", label: "📦 Other" },
+];
+
+export const LOST_FOUND_DISTRICTS = [
+  "Anuradhapura",
+  "Mihintale",
+  "Colombo",
+  "Gampaha",
+  "Kandy",
+  "Kurunegala",
+  "Polonnaruwa",
+  "Dambulla",
+  "Other",
+];

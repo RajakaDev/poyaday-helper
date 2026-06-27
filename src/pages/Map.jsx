@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
 import { Link } from "react-router-dom";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
-import { db } from "../firebase";
-import { getDansalTimeStatus } from "../utils/dansalStatus";
+import { usePlaces } from "../hooks/usePlaces";
+import { PLACE_TYPES } from "../utils/types";
 
 const markerIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -19,43 +18,35 @@ const userIcon = new L.Icon({
   iconAnchor: [14, 28],
 });
 
+function getTypeLabel(type) {
+  return PLACE_TYPES.find((t) => t.id === type)?.name || "📍 Place";
+}
+
 function RecenterMap({ center, zoom = 13 }) {
   const map = useMap();
 
   useEffect(() => {
-    if (center) {
-      map.setView(center, zoom);
-    }
+    if (center) map.setView(center, zoom);
   }, [center, zoom, map]);
 
   return null;
 }
 
-export default function DansalMap({ lang = "si" }) {
-  const [dansals, setDansals] = useState([]);
+export default function Map({ lang = "si" }) {
+  const { places, loading } = usePlaces();
+
   const [userLocation, setUserLocation] = useState(null);
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
 
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, "dansals"), (snapshot) => {
-      const data = snapshot.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .filter((d) => d.hidden !== true && d.lat && d.lng);
+  const mapPlaces = useMemo(() => {
+    return places.filter((p) => {
+      const hasGps = p.lat && p.lng;
+      const visible = p.hidden !== true;
+      const matchesType = typeFilter === "all" || p.type === typeFilter;
 
-      setDansals(data);
+      return hasGps && visible && matchesType;
     });
-
-    return () => unsub();
-  }, []);
-
-  const filteredDansals = useMemo(() => {
-    if (statusFilter === "all") return dansals;
-
-    return dansals.filter((d) => {
-      const status = getDansalTimeStatus(d.date, d.openTime, d.closeTime);
-      return status.type === statusFilter;
-    });
-  }, [dansals, statusFilter]);
+  }, [places, typeFilter]);
 
   const showMyLocation = () => {
     if (!navigator.geolocation) {
@@ -69,7 +60,8 @@ export default function DansalMap({ lang = "si" }) {
       },
       () => {
         alert(lang === "si" ? "GPS permission දෙන්න" : "Please allow GPS");
-      }
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   };
 
@@ -81,13 +73,13 @@ export default function DansalMap({ lang = "si" }) {
         </Link>
 
         <div className="form-section-title">
-          🗺️ {lang === "si" ? "දන්සල් සිතියම" : "Dansal Map"}
+          🗺️ {lang === "si" ? "PoyaDay සිතියම" : "PoyaDay Map"}
         </div>
 
         <p className="form-section-desc">
           {lang === "si"
-            ? "GPS location ඇති දන්සල් සිතියමෙන් බලන්න."
-            : "View dansals with GPS locations on the map."}
+            ? "දන්සල්, ජල ස්ථාන, parking, toilets, first aid සහ events සිතියමෙන් බලන්න."
+            : "View dansals, water points, parking, toilets, first aid and events on the map."}
         </p>
 
         <div className="map-actions">
@@ -97,34 +89,33 @@ export default function DansalMap({ lang = "si" }) {
 
           <select
             className="filter-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
           >
             <option value="all">
-              {lang === "si" ? "සියලු දන්සල්" : "All Dansals"}
+              {lang === "si" ? "සියලු ස්ථාන" : "All Places"}
             </option>
-            <option value="now">
-              {lang === "si" ? "දැන් විවෘතයි" : "Open Now"}
-            </option>
-            <option value="soon">
-              {lang === "si" ? "ඉක්මනින්" : "Coming Soon"}
-            </option>
-            <option value="ended">
-              {lang === "si" ? "අවසන්" : "Ended"}
-            </option>
+
+            {PLACE_TYPES.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.name}
+              </option>
+            ))}
           </select>
         </div>
 
         <p className="small-note">
-          {lang === "si"
-            ? `සිතියමේ පෙන්වන්නේ GPS location ඇති දන්සල් ${filteredDansals.length}ක් පමණි.`
-            : `Showing ${filteredDansals.length} dansals with GPS location.`}
+          {loading
+            ? "Loading..."
+            : lang === "si"
+            ? `GPS ඇති ස්ථාන ${mapPlaces.length}ක් පෙන්වයි.`
+            : `Showing ${mapPlaces.length} places with GPS.`}
         </p>
       </div>
 
       <div className="map-wrap">
         <MapContainer
-          center={[7.8731, 80.7718]}
+          center={[8.35, 80.5]}
           zoom={8}
           scrollWheelZoom={true}
           className="leaflet-map"
@@ -138,39 +129,30 @@ export default function DansalMap({ lang = "si" }) {
             <>
               <RecenterMap center={userLocation} zoom={13} />
               <Marker position={userLocation} icon={userIcon}>
-                <Popup>
-                  {lang === "si" ? "ඔබගේ ස්ථානය" : "Your Location"}
-                </Popup>
+                <Popup>{lang === "si" ? "ඔබගේ ස්ථානය" : "Your Location"}</Popup>
               </Marker>
             </>
           )}
 
-          {filteredDansals.map((d) => {
-            const status = getDansalTimeStatus(
-              d.date,
-              d.openTime,
-              d.closeTime
-            );
-
-            const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lng}`;
+          {mapPlaces.map((p) => {
+            const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
 
             return (
               <Marker
-                key={d.id}
-                position={[Number(d.lat), Number(d.lng)]}
+                key={p.id}
+                position={[Number(p.lat), Number(p.lng)]}
                 icon={markerIcon}
               >
                 <Popup>
-                  <strong>🍛 {d.name}</strong>
+                  <strong>{getTypeLabel(p.type)} {p.name}</strong>
                   <br />
-                  {d.foodType}
+                  🏷️ {p.category || p.type || "Place"}
                   <br />
-                  📍 {d.location}{" "}
-                  {d.customLocation ? `- ${d.customLocation}` : ""}
+                  📍 {p.district || "-"} {p.town ? `- ${p.town}` : ""}
                   <br />
-                  🕒 {status.label}
+                  👥 Crowd: {p.crowdLevel || "medium"}
                   <br />
-                  <a href={`/dansal/${d.id}`}>
+                  <a href={`/place/${p.id}`}>
                     {lang === "si" ? "විස්තර බලන්න" : "View Details"}
                   </a>
                   <br />

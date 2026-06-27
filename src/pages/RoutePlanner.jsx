@@ -1,50 +1,81 @@
-import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { db } from "../firebase";
+import { usePlaces } from "../hooks/usePlaces";
+import { distanceKm } from "../utils/distance";
+import { PLACE_TYPES } from "../utils/types";
 
-function distanceKm(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) ** 2;
-
-  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+function getTypeLabel(type) {
+  return PLACE_TYPES.find((t) => t.id === type)?.name || "📍 Place";
 }
 
 export default function RoutePlanner({ lang = "si" }) {
-  const [dansals, setDansals] = useState([]);
+  const { places, loading } = usePlaces();
+
   const [selectedIds, setSelectedIds] = useState([]);
+  const [userLocation, setUserLocation] = useState(null);
+  const [typeFilter, setTypeFilter] = useState("all");
 
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, "dansals"), (snapshot) => {
-      const data = snapshot.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .filter((d) => d.hidden !== true && d.lat && d.lng);
+  const getMyLocation = () => {
+    if (!navigator.geolocation) {
+      alert("GPS not supported");
+      return;
+    }
 
-      setDansals(data);
-    });
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        });
+      },
+      () => alert("Please allow GPS permission"),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
-    return () => unsub();
-  }, []);
+  const gpsPlaces = useMemo(() => {
+    return places
+      .filter((p) => p.hidden !== true && p.lat && p.lng)
+      .map((p) => ({
+        ...p,
+        distance:
+          userLocation && p.lat && p.lng
+            ? distanceKm(
+                userLocation.lat,
+                userLocation.lng,
+                Number(p.lat),
+                Number(p.lng)
+              )
+            : null,
+      }))
+      .filter((p) => typeFilter === "all" || p.type === typeFilter)
+      .sort((a, b) => {
+        if (!userLocation) return 0;
+        return (a.distance ?? 99999) - (b.distance ?? 99999);
+      });
+  }, [places, userLocation, typeFilter]);
 
-  const selectedDansals = selectedIds
-    .map((id) => dansals.find((d) => d.id === id))
+  const selectedPlaces = selectedIds
+    .map((id) => gpsPlaces.find((p) => p.id === id))
     .filter(Boolean);
 
   const totalDistance = useMemo(() => {
-    if (selectedDansals.length < 2) return 0;
+    if (selectedPlaces.length === 0) return 0;
 
     let total = 0;
 
-    for (let i = 0; i < selectedDansals.length - 1; i++) {
-      const a = selectedDansals[i];
-      const b = selectedDansals[i + 1];
+    if (userLocation && selectedPlaces[0]) {
+      total += distanceKm(
+        userLocation.lat,
+        userLocation.lng,
+        Number(selectedPlaces[0].lat),
+        Number(selectedPlaces[0].lng)
+      );
+    }
+
+    for (let i = 0; i < selectedPlaces.length - 1; i++) {
+      const a = selectedPlaces[i];
+      const b = selectedPlaces[i + 1];
 
       total += distanceKm(
         Number(a.lat),
@@ -55,12 +86,12 @@ export default function RoutePlanner({ lang = "si" }) {
     }
 
     return total;
-  }, [selectedDansals]);
+  }, [selectedPlaces, userLocation]);
 
   const estimatedMinutes = Math.round((totalDistance / 25) * 60);
 
-  const foodTypes = [
-    ...new Set(selectedDansals.map((d) => d.foodType).filter(Boolean)),
+  const categories = [
+    ...new Set(selectedPlaces.map((p) => p.category || p.type).filter(Boolean)),
   ];
 
   const toggleSelect = (id) => {
@@ -69,25 +100,32 @@ export default function RoutePlanner({ lang = "si" }) {
     );
   };
 
-  const optimizeRoute = () => {
-    if (selectedDansals.length < 2) return;
+  const clearRoute = () => {
+    setSelectedIds([]);
+  };
 
-    const remaining = [...selectedDansals];
+  const optimizeRoute = () => {
+    if (selectedPlaces.length < 2) return;
+
+    const remaining = [...selectedPlaces];
     const optimized = [];
 
-    let current = remaining.shift();
-    optimized.push(current);
+    let current = userLocation
+      ? { lat: userLocation.lat, lng: userLocation.lng }
+      : remaining.shift();
+
+    if (!userLocation && current?.id) optimized.push(current);
 
     while (remaining.length > 0) {
       let nearestIndex = 0;
       let nearestDistance = Infinity;
 
-      remaining.forEach((d, index) => {
+      remaining.forEach((p, index) => {
         const dist = distanceKm(
           Number(current.lat),
           Number(current.lng),
-          Number(d.lat),
-          Number(d.lng)
+          Number(p.lat),
+          Number(p.lng)
         );
 
         if (dist < nearestDistance) {
@@ -100,15 +138,53 @@ export default function RoutePlanner({ lang = "si" }) {
       optimized.push(current);
     }
 
-    setSelectedIds(optimized.map((d) => d.id));
+    setSelectedIds(optimized.map((p) => p.id));
+  };
+
+  const smartRoute = () => {
+    if (!userLocation) {
+      alert("Please get your location first.");
+      return;
+    }
+
+    const neededTypes = ["parking", "temple", "water", "toilet", "dansal"];
+
+    const smartSelected = [];
+
+    neededTypes.forEach((type) => {
+      const nearest = gpsPlaces
+        .filter((p) => p.type === type && !smartSelected.some((s) => s.id === p.id))
+        .sort((a, b) => (a.distance ?? 99999) - (b.distance ?? 99999))[0];
+
+      if (nearest) smartSelected.push(nearest);
+    });
+
+    if (smartSelected.length === 0) {
+      alert("No suitable GPS places found.");
+      return;
+    }
+
+    setSelectedIds(smartSelected.map((p) => p.id));
   };
 
   const openGoogleMapsRoute = () => {
-    if (selectedDansals.length === 0) return;
+    if (selectedPlaces.length === 0) return;
 
-    const points = selectedDansals.map((d) => `${d.lat},${d.lng}`).join("/");
+    const points = [];
 
-    window.open(`https://www.google.com/maps/dir/${points}`, "_blank");
+    if (userLocation) {
+      points.push(`${userLocation.lat},${userLocation.lng}`);
+    }
+
+    selectedPlaces.forEach((p) => {
+      points.push(`${p.lat},${p.lng}`);
+    });
+
+    window.open(
+      `https://www.google.com/maps/dir/${points.join("/")}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
   };
 
   return (
@@ -119,27 +195,60 @@ export default function RoutePlanner({ lang = "si" }) {
         </Link>
 
         <div className="form-section-title">
-          🧭{" "}
-          {lang === "si" ? "දන්සල් මාර්ගය සැලසුම් කරන්න" : "Plan Dansal Route"}
+          🧭 {lang === "si" ? "ගමන් මාර්ගය සැලසුම් කරන්න" : "Plan Route"}
         </div>
 
         <p className="form-section-desc">
           {lang === "si"
-            ? "GPS location ඇති දන්සල් තෝරාගෙන කෙටි මාර්ගයක් සැලසුම් කරන්න."
-            : "Select dansals with GPS locations and plan an optimized route."}
+            ? "GPS ඇති ස්ථාන තෝරාගෙන හොඳ route එකක් සැලසුම් කරන්න."
+            : "Select GPS-enabled places and plan a better route."}
         </p>
 
+        <div className="home-action-row">
+          <button className="gps-btn" type="button" onClick={getMyLocation}>
+            📍 {lang === "si" ? "මගේ ස්ථානය" : "My Location"}
+          </button>
+
+          <button className="home-action-btn" type="button" onClick={smartRoute}>
+            🤖 Smart Route
+          </button>
+
+          <button
+            className="home-action-btn"
+            type="button"
+            onClick={optimizeRoute}
+            disabled={selectedPlaces.length < 2}
+          >
+            ⚡ Optimize
+          </button>
+        </div>
+
+        <div className="filter-row">
+          <select
+            className="filter-select"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+          >
+            <option value="all">All Places</option>
+            {PLACE_TYPES.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="route-report">
-          <strong>{lang === "si" ? "මාර්ග වාර්තාව" : "Route Report"}</strong>
+          <strong>🚗 {lang === "si" ? "Route Summary" : "Route Summary"}</strong>
 
           <p>
-            {lang === "si" ? "තෝරාගත් දන්සල්" : "Selected Dansals"}:{" "}
-            {selectedDansals.length}
+            {lang === "si" ? "තෝරාගත් ස්ථාන" : "Selected Places"}:{" "}
+            {selectedPlaces.length}
           </p>
 
           <p>
-            {lang === "si" ? "ආහාර වර්ග" : "Food Types Covered"}:{" "}
-            {foodTypes.length ? foodTypes.join(", ") : "-"}
+            {lang === "si" ? "වර්ග" : "Types Covered"}:{" "}
+            {categories.length ? categories.join(", ") : "-"}
           </p>
 
           <p>
@@ -154,58 +263,79 @@ export default function RoutePlanner({ lang = "si" }) {
 
           <div className="route-action-grid">
             <button
-              className="home-action-btn"
-              type="button"
-              disabled={selectedDansals.length < 2}
-              onClick={optimizeRoute}
-            >
-              ⚡{" "}
-              {lang === "si" ? "කෙටිම මාර්ගයට සකසන්න" : "Optimize Route"}
-            </button>
-
-            <button
               className="submit-btn"
               type="button"
-              disabled={selectedDansals.length === 0}
+              disabled={selectedPlaces.length === 0}
               onClick={openGoogleMapsRoute}
             >
-              🗺️{" "}
-              {lang === "si"
-                ? "Google Maps Route විවෘත කරන්න"
-                : "Open Google Maps Route"}
+              🗺️ {lang === "si" ? "Google Maps" : "Open Google Maps"}
             </button>
+
+            {selectedPlaces.length > 0 && (
+              <button className="clear-gps-btn" type="button" onClick={clearRoute}>
+                ✕ {lang === "si" ? "Route ඉවත් කරන්න" : "Clear Route"}
+              </button>
+            )}
           </div>
         </div>
+
+        {selectedPlaces.length > 0 && (
+          <div className="analytics-section">
+            <h3>🧭 Route Timeline</h3>
+
+            {selectedPlaces.map((p, index) => (
+              <div className="analytics-row" key={p.id}>
+                <span>
+                  {index + 1}. {getTypeLabel(p.type)} {p.name}
+                </span>
+                <strong>
+                  {p.distance !== null && p.distance !== undefined
+                    ? `${p.distance.toFixed(1)} km`
+                    : "GPS"}
+                </strong>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="cards">
-        {dansals.length === 0 ? (
+        {loading ? (
+          <div className="empty-state">Loading...</div>
+        ) : gpsPlaces.length === 0 ? (
           <div className="empty-state">
-            {lang === "si"
-              ? "GPS ඇති දන්සල් තවම නැහැ."
-              : "No GPS dansals yet."}
+            {lang === "si" ? "GPS ඇති ස්ථාන තවම නැහැ." : "No GPS places yet."}
           </div>
         ) : (
-          dansals.map((d) => (
+          gpsPlaces.map((p) => (
             <button
-              key={d.id}
+              key={p.id}
               className={`route-card ${
-                selectedIds.includes(d.id) ? "selected" : ""
+                selectedIds.includes(p.id) ? "selected" : ""
               }`}
-              onClick={() => toggleSelect(d.id)}
+              onClick={() => toggleSelect(p.id)}
               type="button"
             >
               <div>
-                <strong>🍛 {d.name}</strong>
+                <strong>
+                  {getTypeLabel(p.type)} {p.name}
+                </strong>
+
                 <p>
-                  📍 {d.location}{" "}
-                  {d.customLocation ? `- ${d.customLocation}` : ""}
+                  📍 {p.district || "-"} {p.town ? `- ${p.town}` : ""}
                 </p>
-                <p>🍽️ {d.foodType}</p>
+
+                <p>🏷️ {p.category || p.type || "Place"}</p>
+
+                <p>👥 {p.crowdLevel || "medium"}</p>
+
+                {p.distance !== null && p.distance !== undefined && (
+                  <p>📏 {p.distance.toFixed(1)} km away</p>
+                )}
               </div>
 
               <span>
-                {selectedIds.includes(d.id)
+                {selectedIds.includes(p.id)
                   ? lang === "si"
                     ? "තෝරාගෙන ඇත"
                     : "Selected"

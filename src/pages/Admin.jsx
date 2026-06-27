@@ -8,25 +8,28 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import {
-  getAuth,
   GoogleAuthProvider,
   onAuthStateChanged,
   signInWithPopup,
   signOut,
 } from "firebase/auth";
 import { Link } from "react-router-dom";
-import { db } from "../firebase";
+import { auth, db } from "../firebase/firebase";
+import { PLACE_TYPES } from "../utils/types";
+import AdminPromotions from "../components/AdminPromotions";
 
 const ADMIN_EMAIL = "udararajaka80@gmail.com";
 
-export default function Admin({ lang = "si" }) {
-  const auth = getAuth();
+function getTypeLabel(type) {
+  return PLACE_TYPES.find((t) => t.id === type)?.name || type || "Place";
+}
 
+export default function Admin({ lang = "si" }) {
   const [authChecked, setAuthChecked] = useState(false);
   const [user, setUser] = useState(null);
-  const [dansals, setDansals] = useState([]);
-  const [photosByDansal, setPhotosByDansal] = useState({});
-  const [loadingDansals, setLoadingDansals] = useState(false);
+  const [places, setPlaces] = useState([]);
+  const [photosByPlace, setPhotosByPlace] = useState({});
+  const [loadingPlaces, setLoadingPlaces] = useState(false);
 
   const isAdmin =
     user?.email?.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase().trim();
@@ -38,15 +41,15 @@ export default function Admin({ lang = "si" }) {
     });
 
     return () => unsubAuth();
-  }, [auth]);
+  }, []);
 
   useEffect(() => {
     if (!isAdmin) return;
 
-    setLoadingDansals(true);
+    setLoadingPlaces(true);
 
-    const unsubDansals = onSnapshot(
-      collection(db, "dansals"),
+    const unsubPlaces = onSnapshot(
+      collection(db, "places"),
       async (snap) => {
         const data = snap.docs.map((d) => ({
           id: d.id,
@@ -59,14 +62,14 @@ export default function Admin({ lang = "si" }) {
           return bTime - aTime;
         });
 
-        setDansals(data);
+        setPlaces(data);
 
         const photoData = {};
 
         for (const item of data) {
           try {
             const photoSnap = await getDocs(
-              collection(db, "dansals", item.id, "photos")
+              collection(db, "places", item.id, "photos")
             );
 
             photoData[item.id] = photoSnap.docs.map((p) => ({
@@ -79,68 +82,61 @@ export default function Admin({ lang = "si" }) {
           }
         }
 
-        setPhotosByDansal(photoData);
-        setLoadingDansals(false);
+        setPhotosByPlace(photoData);
+        setLoadingPlaces(false);
       },
       (error) => {
-        console.error("Admin dansal read error:", error);
+        console.error("Admin read error:", error);
         alert(
           lang === "si"
             ? "Admin data load වෙන්නේ නැහැ. Firestore rules බලන්න."
             : "Admin data not loading. Check Firestore rules."
         );
-        setLoadingDansals(false);
+        setLoadingPlaces(false);
       }
     );
 
-    return () => unsubDansals();
+    return () => unsubPlaces();
   }, [isAdmin, lang]);
 
   const login = async () => {
     try {
       const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({
-        prompt: "select_account",
-      });
-
+      provider.setCustomParameters({ prompt: "select_account" });
       await signInWithPopup(auth, provider);
     } catch (err) {
       console.error("Google login error:", err);
-      alert(
-        lang === "si"
-          ? "Google login අසාර්ථකයි. Console error බලන්න."
-          : "Google login failed. Check console error."
-      );
+      alert("Google login failed. Check console error.");
     }
   };
 
-  const updateDansal = async (id, data) => {
+  const updatePlace = async (id, data) => {
     try {
-      await updateDoc(doc(db, "dansals", id), data);
+      await updateDoc(doc(db, "places", id), data);
     } catch (err) {
       console.error("Update error:", err);
       alert("Update failed. Check Firestore rules.");
     }
   };
 
-  const deleteDansal = async (id) => {
-    const ok = confirm("Delete this dansal permanently?");
+  const deletePlace = async (id) => {
+    const ok = confirm("Delete this place permanently?");
     if (!ok) return;
 
     try {
-      await deleteDoc(doc(db, "dansals", id));
+      await deleteDoc(doc(db, "places", id));
     } catch (err) {
       console.error("Delete error:", err);
       alert("Delete failed. Check Firestore rules.");
     }
   };
 
-  const deletePhoto = async (dansalId, photoId) => {
+  const deletePhoto = async (placeId, photoId) => {
     const ok = confirm("Delete this photo from website?");
     if (!ok) return;
 
     try {
-      await deleteDoc(doc(db, "dansals", dansalId, "photos", photoId));
+      await deleteDoc(doc(db, "places", placeId, "photos", photoId));
     } catch (err) {
       console.error("Photo delete error:", err);
       alert("Photo delete failed. Check Firestore rules.");
@@ -216,12 +212,12 @@ export default function Admin({ lang = "si" }) {
           ← Back
         </Link>
 
-        <div className="form-section-title">🛠 Admin Dashboard</div>
+        <div className="form-section-title">🛠 PoyaDay Admin Dashboard</div>
 
         <p className="form-section-desc">
           Logged in as {user.email}
           <br />
-          Total Dansals: {dansals.length}
+          Total Places: {places.length}
         </p>
 
         <button className="close-btn" type="button" onClick={() => signOut(auth)}>
@@ -230,79 +226,98 @@ export default function Admin({ lang = "si" }) {
       </div>
 
       <div className="admin-list">
-        {loadingDansals && (
-          <div className="empty-state">Loading dansals...</div>
+        {loadingPlaces && <div className="empty-state">Loading places...</div>}
+
+        {!loadingPlaces && places.length === 0 && (
+          <div className="empty-state">No places found. Add a place first.</div>
         )}
 
-        {!loadingDansals && dansals.length === 0 && (
-          <div className="empty-state">
-            No dansals found. Add a dansal first.
-          </div>
-        )}
-
-        {dansals.map((d) => (
-          <div key={d.id} className="admin-card">
+        {places.map((p) => (
+          <div key={p.id} className="admin-card">
             <div className="admin-card-head">
               <div>
-                <h3>🍛 {d.name || "No name"}</h3>
+                <h3>
+                  {getTypeLabel(p.type)} {p.name || "No name"}
+                </h3>
+
                 <p>
-                  📍 {d.location || "-"}{" "}
-                  {d.customLocation ? `- ${d.customLocation}` : ""}
+                  📍 {p.district || "-"} {p.town ? `- ${p.town}` : ""}
                 </p>
-                <p>📌 {d.exactLocation || "-"}</p>
-                <p>🍽️ {d.foodType || "-"}</p>
-                <p>📅 {d.date || "-"} | 🕒 {d.openTime || "-"} {d.closeTime ? `- ${d.closeTime}` : ""}</p>
-                <p>⚠️ Reports: {d.reportCount || 0}</p>
-                <p>Status: {d.status || "open"}</p>
-                <p>Hidden: {d.hidden ? "Yes" : "No"}</p>
-                <p>Verified: {d.verified ? "Yes" : "No"}</p>
-                <p>GPS: {d.lat && d.lng ? `${d.lat}, ${d.lng}` : "No GPS"}</p>
+
+                <p>📌 {p.address || "-"}</p>
+                <p>🏷️ {p.category || p.type || "-"}</p>
+
+                <p>
+                  📅 {p.date || "-"} | 🕒 {p.openTime || "-"}{" "}
+                  {p.closeTime ? `- ${p.closeTime}` : ""}
+                </p>
+
+                <p>👥 Crowd: {p.crowdLevel || "medium"}</p>
+                <p>⚠️ Reports: {p.reports || 0}</p>
+                <p>Status: {p.status || "open"}</p>
+                <p>Hidden: {p.hidden ? "Yes" : "No"}</p>
+                <p>Verified: {p.verified ? "Yes" : "No"}</p>
+                <p>GPS: {p.lat && p.lng ? `${p.lat}, ${p.lng}` : "No GPS"}</p>
               </div>
             </div>
 
             <div className="admin-actions">
               <button
                 type="button"
-                onClick={() => updateDansal(d.id, { hidden: !d.hidden })}
+                onClick={() => updatePlace(p.id, { hidden: !p.hidden })}
               >
-                {d.hidden ? "Unhide" : "Hide"}
+                {p.hidden ? "Unhide" : "Hide"}
               </button>
 
               <button
                 type="button"
-                onClick={() => updateDansal(d.id, { verified: !d.verified })}
+                onClick={() => updatePlace(p.id, { verified: !p.verified })}
               >
-                {d.verified ? "Remove Verify" : "Verify"}
+                {p.verified ? "Remove Verify" : "Verify"}
               </button>
 
               <button
                 type="button"
                 onClick={() =>
-                  updateDansal(d.id, {
-                    status: d.status === "closed" ? "open" : "closed",
+                  updatePlace(p.id, {
+                    status: p.status === "closed" ? "open" : "closed",
                   })
                 }
               >
-                {d.status === "closed" ? "Mark Open" : "Mark Closed"}
+                {p.status === "closed" ? "Mark Open" : "Mark Closed"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  updatePlace(p.id, {
+                    reports: 0,
+                    status: "open",
+                    hidden: false,
+                  })
+                }
+              >
+                Clear Reports
               </button>
 
               <button
                 type="button"
                 className="danger"
-                onClick={() => deleteDansal(d.id)}
+                onClick={() => deletePlace(p.id)}
               >
                 Delete
               </button>
             </div>
 
             <div className="admin-photos">
-              {(photosByDansal[d.id] || []).map((p) => (
-                <div key={p.id} className="admin-photo-item">
-                  <img src={p.url} alt="memory" />
+              {(photosByPlace[p.id] || []).map((photo) => (
+                <div key={photo.id} className="admin-photo-item">
+                  <img src={photo.url} alt="memory" />
+
                   <button
                     type="button"
                     className="danger"
-                    onClick={() => deletePhoto(d.id, p.id)}
+                    onClick={() => deletePhoto(p.id, photo.id)}
                   >
                     Delete Photo
                   </button>
@@ -312,6 +327,8 @@ export default function Admin({ lang = "si" }) {
           </div>
         ))}
       </div>
+
+      <AdminPromotions lang={lang} />
     </div>
   );
 }

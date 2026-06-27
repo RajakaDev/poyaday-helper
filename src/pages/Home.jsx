@@ -1,474 +1,262 @@
-import { timeAgo } from "../utils/timeAgo";
-import { useEffect, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { db } from "../firebase";
-import { text } from "../lang";
-import { getDansalTimeStatus } from "../utils/dansalStatus";
-import { isDansalCovered, markDansalCovered } from "../utils/coveredDansals";
+import { usePlaces } from "../hooks/usePlaces";
+import { useLocation } from "../hooks/useLocation";
+import { PLACE_TYPES } from "../utils/types";
+import { distanceKm } from "../utils/distance";
+import { listenActivePromotions } from "../services/promotionService";
+import PromotionCard from "../components/PromotionCard";
 
-function queueLabel(q, lang = "si") {
-  const map = {
-    si: {
-      no: "🟢 පෝලිම නැහැ",
-      short: "🟡 කෙටි පෝලිම",
-      medium: "🟠 මධ්‍යම",
-      long: "🔴 දිග",
-    },
-    en: {
-      no: "🟢 No Queue",
-      short: "🟡 Short",
-      medium: "🟠 Medium",
-      long: "🔴 Long",
-    },
-  };
-
-  return map[lang]?.[q] || map[lang]?.medium || "🟠 Medium";
-}
-
-function queueClass(q) {
-  return {
-    no: "no",
-    short: "short",
-    medium: "medium",
-    long: "long",
-  }[q] || "medium";
-}
-
-function distanceKm(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) ** 2;
-
-  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+function getTypeLabel(type) {
+  return PLACE_TYPES.find((t) => t.id === type)?.name || "📍 Place";
 }
 
 export default function Home({ lang = "si" }) {
-  const t = text[lang] || text.si;
+  const { places, loading } = usePlaces();
+  const { location, loadingLocation, getLocation } = useLocation();
 
-  const [dansals, setDansals] = useState([]);
+  const [online, setOnline] = useState(navigator.onLine);
   const [search, setSearch] = useState("");
-  const [queueFilter, setQueueFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [districtFilter, setDistrictFilter] = useState("all");
-  const [foodFilter, setFoodFilter] = useState("all");
-  const [userLocation, setUserLocation] = useState(null);
+  const [typeFilter, setTypeFilter] = useState("all");
   const [nearbyOnly, setNearbyOnly] = useState(false);
+  const [promotions, setPromotions] = useState([]);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "dansals"), (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      data.sort((a, b) => {
-        const aTime = a.createdAt?.seconds || 0;
-        const bTime = b.createdAt?.seconds || 0;
-        return bTime - aTime;
-      });
-
-      setDansals(data);
-    });
-
+    const unsub = listenActivePromotions(setPromotions);
     return () => unsub();
   }, []);
 
-  const findNearby = () => {
-    if (!navigator.geolocation) {
-      alert(lang === "si" ? "GPS support නැහැ" : "GPS not supported");
-      return;
-    }
+  useEffect(() => {
+    const goOnline = () => setOnline(true);
+    const goOffline = () => setOnline(false);
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setUserLocation({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        });
-        setNearbyOnly(true);
-      },
-      () => {
-        alert(lang === "si" ? "GPS permission දෙන්න" : "Please allow GPS");
-      }
-    );
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
+
+  const visiblePlaces = useMemo(() => {
+    return places
+      .filter((p) => p.hidden !== true)
+      .map((p) => {
+        const distance =
+          location && p.lat && p.lng
+            ? distanceKm(location.lat, location.lng, Number(p.lat), Number(p.lng))
+            : null;
+
+        return { ...p, distance };
+      })
+      .filter((p) => {
+        const text = `${p.name || ""} ${p.district || ""} ${p.town || ""} ${
+          p.address || ""
+        } ${p.category || ""} ${p.type || ""}`.toLowerCase();
+
+        const matchesSearch = text.includes(search.toLowerCase());
+        const matchesType = typeFilter === "all" || p.type === typeFilter;
+        const matchesNearby = !nearbyOnly || (p.distance !== null && p.distance <= 10);
+
+        return matchesSearch && matchesType && matchesNearby;
+      })
+      .filter((p) => p.status !== "closed")
+      .sort((a, b) => {
+        if (!location) return 0;
+        return (a.distance ?? 99999) - (b.distance ?? 99999);
+      });
+  }, [places, search, typeFilter, nearbyOnly, location]);
+
+  const handleNearby = () => {
+    getLocation();
+    setNearbyOnly(true);
   };
 
-  const visibleDansals = dansals.filter((d) => d.hidden !== true);
-
-  const districts = [
-    ...new Set(visibleDansals.map((d) => d.location).filter(Boolean)),
-  ].sort();
-
-  const foodTypes = [
-    ...new Set(visibleDansals.map((d) => d.foodType).filter(Boolean)),
-  ].sort();
-
-  const filtered = visibleDansals.filter((d) => {
-    const timeStatus = getDansalTimeStatus(d.date, d.openTime, d.closeTime);
-
-    const matchesSearch = `${d.name || ""} ${d.location || ""} ${
-      d.customLocation || ""
-    } ${d.exactLocation || ""} ${d.foodType || ""}`
-      .toLowerCase()
-      .includes(search.toLowerCase());
-
-    const matchesQueue = queueFilter === "all" || d.queue === queueFilter;
-
-    const matchesStatus =
-      statusFilter === "all" || timeStatus.type === statusFilter;
-
-    const matchesDistrict =
-      districtFilter === "all" || d.location === districtFilter;
-
-    const matchesFood = foodFilter === "all" || d.foodType === foodFilter;
-
-    const distance =
-      userLocation && d.lat && d.lng
-        ? distanceKm(
-            userLocation.lat,
-            userLocation.lng,
-            Number(d.lat),
-            Number(d.lng)
-          )
-        : null;
-
-    const matchesNearby = !nearbyOnly || (distance !== null && distance <= 10);
-
-    return (
-      matchesSearch &&
-      matchesQueue &&
-      matchesStatus &&
-      matchesDistrict &&
-      matchesFood &&
-      matchesNearby
-    );
-  });
-
-  const sortedFiltered = [...filtered].sort((a, b) => {
-    if (!userLocation) return 0;
-
-    const da =
-      a.lat && a.lng
-        ? distanceKm(
-            userLocation.lat,
-            userLocation.lng,
-            Number(a.lat),
-            Number(a.lng)
-          )
-        : 99999;
-
-    const db =
-      b.lat && b.lng
-        ? distanceKm(
-            userLocation.lat,
-            userLocation.lng,
-            Number(b.lat),
-            Number(b.lng)
-          )
-        : 99999;
-
-    return da - db;
-  });
-
-  const openNowDansals = sortedFiltered
-    .filter((d) => {
-      const status = getDansalTimeStatus(d.date, d.openTime, d.closeTime);
-      return status.type === "now";
-    })
-    .slice(0, 5);
-
   return (
-    <div className="page active">
-      <div className="hero">
-        <span className="hero-emoji">🪔🏮🌕</span>
+    <div className="page active home-page">
+      <section className="hero home-hero">
+        <div className="hero-badge">🌕 PoyaDay Helper</div>
 
-        <h1 className="hero-title">{t.title}</h1>
+        <h1 className="hero-title">
+          {lang === "si" ? "ඔබ අසල වැදගත් ස්ථාන සොයන්න" : "Find useful places near you"}
+        </h1>
 
-        <p className="hero-desc">{t.desc}</p>
+        <p className="hero-desc">
+          {lang === "si"
+            ? "දන්සල්, ජල ස්ථාන, parking, toilets, පන්සල්, first aid සහ events පහසුවෙන් සොයන්න."
+            : "Find dansals, water points, parking, toilets, temples, first aid and events easily."}
+        </p>
 
-        <div className="search-wrap">
+        <div className="search-wrap home-search">
           <span className="search-icon">🔍</span>
-
           <input
             className="search-input"
-            placeholder={t.search}
+            placeholder={
+              lang === "si"
+                ? "නම, නගරය, ප්‍රදේශය සොයන්න..."
+                : "Search name, city, area..."
+            }
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
-        <div className="filter-row filter-row-4">
-          <select
-            className="filter-select"
-            value={districtFilter}
-            onChange={(e) => setDistrictFilter(e.target.value)}
-          >
-            <option value="all">
-              {lang === "si" ? "සියලු දිස්ත්‍රික්ක" : "All Districts"}
-            </option>
+        <div className="home-primary-actions">
+          <button className="home-action-btn primary-action" type="button" onClick={handleNearby}>
+            📍 {loadingLocation ? "Finding..." : lang === "si" ? "මා අසල" : "Nearby"}
+          </button>
 
-            {districts.map((district) => (
-              <option key={district} value={district}>
-                {district}
-              </option>
-            ))}
-          </select>
+          <Link to="/assistant" className="home-action-btn">
+            🤖 Smart
+          </Link>
 
-          <select
-            className="filter-select"
-            value={foodFilter}
-            onChange={(e) => setFoodFilter(e.target.value)}
-          >
-            <option value="all">
-              {lang === "si" ? "සියලු ආහාර" : "All Food"}
-            </option>
+          <Link to="/emergency" className="home-action-btn">
+            🚨 Emergency
+          </Link>
 
-            {foodTypes.map((food) => (
-              <option key={food} value={food}>
-                {food}
-              </option>
-            ))}
-          </select>
-
-          <select
-            className="filter-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="all">
-              {lang === "si" ? "සියලු තත්ත්ව" : "All Status"}
-            </option>
-
-            <option value="soon">
-              {lang === "si" ? "ඉක්මනින්" : "Coming Soon"}
-            </option>
-
-            <option value="now">
-              {lang === "si" ? "දැන් විවෘතයි" : "Now Open"}
-            </option>
-
-            <option value="ended">
-              {lang === "si" ? "අවසන්" : "Ended"}
-            </option>
-          </select>
-
-          <select
-            className="filter-select"
-            value={queueFilter}
-            onChange={(e) => setQueueFilter(e.target.value)}
-          >
-            <option value="all">
-              {lang === "si" ? "සියලු පෝලිම්" : "All Queues"}
-            </option>
-
-            <option value="no">
-              {lang === "si" ? "පෝලිම නැහැ" : "No Queue"}
-            </option>
-
-            <option value="short">
-              {lang === "si" ? "කෙටි පෝලිම" : "Short"}
-            </option>
-
-            <option value="medium">
-              {lang === "si" ? "මධ්‍යම පෝලිම" : "Medium"}
-            </option>
-
-            <option value="long">
-              {lang === "si" ? "දිග පෝලිම" : "Long"}
-            </option>
-          </select>
+          <Link to="/map" className="home-action-btn">
+            🗺️ Map
+          </Link>
         </div>
 
-        <button className="gps-btn" onClick={findNearby}>
-          📍 {lang === "si" ? "මා අසල දන්සල්" : "Nearby Dansals"}
-        </button>
-
         {nearbyOnly && (
-          <button
-            className="clear-gps-btn"
-            onClick={() => {
-              setNearbyOnly(false);
-              setUserLocation(null);
-            }}
-          >
+          <button className="clear-gps-btn" type="button" onClick={() => setNearbyOnly(false)}>
             ✕ {lang === "si" ? "Nearby ඉවත් කරන්න" : "Clear Nearby"}
           </button>
         )}
+      </section>
 
-        <div className="home-action-row">
-          <Link to="/map" className="home-action-btn">
-            🗺️ {lang === "si" ? "සිතියමෙන් බලන්න" : "View Map"}
-          </Link>
-
-          <Link to="/route" className="home-action-btn">
-            🧭 {lang === "si" ? "මාර්ගය සැලසුම් කරන්න" : "Plan Route"}
-          </Link>
-
-          <Link to="/analytics" className="home-action-btn">
-            📊 {lang === "si" ? "විශ්ලේෂණ" : "Analytics"}
-          </Link>
-        </div>
+      <div className="quick-grid">
+        <Link to="/add" className="quick-card">➕ <span>Add Place</span></Link>
+        <Link to="/add-event" className="quick-card">🏮 <span>Add Event</span></Link>
+        <Link to="/route" className="quick-card">🧭 <span>Route</span></Link>
+        <Link to="/lost-found" className="quick-card">🔍 <span>Lost & Found</span></Link>
+        <Link to="/road-alerts" className="quick-card">🚧 <span>Roads</span></Link>
+        <Link to="/feed" className="quick-card">📢 <span>Feed</span></Link>
+        <Link to="/events" className="quick-card">🌕 <span>Events</span></Link>
+        <Link to="/about" className="quick-card">ℹ️ <span>About</span></Link>
       </div>
 
-      <div className="notice-box">
-        <strong>
-          {lang === "si" ? "වැදගත් දැනුම්දීම" : "Important Notice"}
-        </strong>
+      <div className="poson-category-row home-category-row">
+        <button
+          className={`poson-category-chip ${typeFilter === "all" ? "active-chip" : ""}`}
+          onClick={() => setTypeFilter("all")}
+          type="button"
+        >
+          🗺️ All
+        </button>
 
+        {PLACE_TYPES.map((type) => (
+          <button
+            key={type.id}
+            className={`poson-category-chip ${typeFilter === type.id ? "active-chip" : ""}`}
+            onClick={() => setTypeFilter(type.id)}
+            type="button"
+          >
+            {type.name}
+          </button>
+        ))}
+      </div>
+
+      {!online && (
+        <div className="notice-box">
+          <strong>Offline Mode</strong>
+          <p>You are offline. Some live features may not update.</p>
+        </div>
+      )}
+
+      <div className="notice-box">
+        <strong>Beta Version</strong>
         <p>
           {lang === "si"
-            ? "මෙම වෙබ් අඩවියේ දන්සල් තොරතුරු මහජනතාව විසින් එකතු කරන ඒවා වේ. සමහර තොරතුරු වැරදි හෝ යාවත්කාලීන නොවිය හැක. යාමට පෙර ස්ථානය, වේලාව සහ ආහාර තත්ත්වය නැවත පරීක්ෂා කරන්න."
-            : "Dansal details on this website are added and updated by the public. Some information may be incorrect or outdated. Please check the location, time, and food availability before visiting."}
+            ? "තොරතුරු මහජනතාව විසින් එකතු කරන බැවින් යාමට පෙර නැවත පරීක්ෂා කරන්න."
+            : "Details are added by the public, so please verify before visiting."}
         </p>
       </div>
 
+      {promotions.length > 0 && (
+        <section className="promo-section">
+          <div className="section-header">
+            <span className="section-title">⭐ Sponsored</span>
+            <span className="count-badge">{Math.min(promotions.length, 2)}</span>
+          </div>
+
+          <div className="promo-grid">
+            {promotions.slice(0, 2).map((promo) => (
+              <PromotionCard key={promo.id} promotion={promo} />
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className="section-header">
         <span className="section-title">
-          {lang === "si" ? "දැන් විවෘත දන්සල්" : "Open Now Dansals"}
+          {nearbyOnly
+            ? lang === "si"
+              ? "මා අසල ස්ථාන"
+              : "Nearby Places"
+            : lang === "si"
+            ? "විවෘත / සජීවී ස්ථාන"
+            : "Open / Live Places"}
         </span>
 
-        <span className="count-badge">
-          {lang === "si"
-            ? `දැන් විවෘත දන්සල් ${openNowDansals.length}ක්`
-            : `${openNowDansals.length} Open Now`}
-        </span>
+        <span className="count-badge">{visiblePlaces.length}</span>
       </div>
 
       <div className="cards">
-        {openNowDansals.length === 0 ? (
+        {loading ? (
+          <div className="empty-state">Loading...</div>
+        ) : visiblePlaces.length === 0 ? (
           <div className="empty-state">
-            <span className="empty-emoji">🏮</span>
-            {lang === "si"
-              ? "දැන් විවෘත දන්සලක් හමු නොවීය."
-              : "No open dansals found."}
+            {nearbyOnly ? "No places found within 10km." : "No places found."}
           </div>
         ) : (
-          openNowDansals.map((d) => {
-            const timeStatus = getDansalTimeStatus(
-              d.date,
-              d.openTime,
-              d.closeTime
-            );
-
-            const distance =
-              userLocation && d.lat && d.lng
-                ? distanceKm(
-                    userLocation.lat,
-                    userLocation.lng,
-                    Number(d.lat),
-                    Number(d.lng)
-                  )
-                : null;
-
-            return (
-              <Link key={d.id} to={`/dansal/${d.id}`} className="dansal-card">
-                <div className="card-top">
-                  <div>
-                    <div className="card-name">
-                      🍛 {d.name}
-
-                      {d.verified && (
-                        <span className="verified-badge">
-                          ✅ {lang === "si" ? "තහවුරුයි" : "Verified"}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="card-loc">📍 {d.location}</div>
-
-                    {d.customLocation && (
-                      <div className="card-exact">🏘️ {d.customLocation}</div>
+          visiblePlaces.map((p) => (
+            <Link key={p.id} to={`/place/${p.id}`} className="dansal-card">
+              <div className="card-top">
+                <div>
+                  <div className="card-name">
+                    {getTypeLabel(p.type)} {p.name}
+                    {p.verified && (
+                      <span className="verified-badge">✅ Verified</span>
                     )}
-
-                    <div className="card-exact">{d.exactLocation}</div>
                   </div>
 
-                  <span className={`status-${timeStatus.type}`}>
-                    {timeStatus.label}
-                  </span>
+                  <div className="card-loc">
+                    📍 {p.district || "-"} {p.town ? `- ${p.town}` : ""}
+                  </div>
+
+                  <div className="card-exact">{p.address || ""}</div>
                 </div>
 
-                {timeStatus.countdown && (
-                  <div className="countdown-box">
-                    ⏳{" "}
-                    {timeStatus.type === "soon"
-                      ? lang === "si"
-                        ? "ආරම්භයට"
-                        : "Starts in"
-                      : lang === "si"
-                      ? "අවසන් වීමට"
-                      : "Ends in"}{" "}
-                    {timeStatus.countdown}
-                  </div>
+                <span className={`status-${p.status || "open"}`}>
+                  {p.status || "open"}
+                </span>
+              </div>
+
+              <div className="card-tags">
+                <span className="tag tag-food">🏷️ {p.category || p.type || "place"}</span>
+                <span className="tag tag-food">👥 {p.crowdLevel || "medium"}</span>
+                {p.lat && p.lng && <span className="tag tag-food">📍 GPS</span>}
+                {p.distance !== null && p.distance !== undefined && (
+                  <span className="tag tag-food">📏 {p.distance.toFixed(1)} km</span>
                 )}
+              </div>
 
-                <div className="card-tags">
-                  <span className="tag tag-food">🍽️ {d.foodType}</span>
-
-                  <span className={`tag tag-queue-${queueClass(d.queue)}`}>
-                    {queueLabel(d.queue, lang)}
-                  </span>
-
-                  <span className="tag tag-food">
-                    👥 {d.queueVotesCount || 0}{" "}
-                    {lang === "si" ? "ඡන්ද" : "votes"}
-                  </span>
-
-                  {distance !== null && (
-                    <span className="tag tag-food">
-                      📍 {distance.toFixed(1)} km
-                    </span>
-                  )}
-                </div>
-
-                <div className="card-time">
-                  <span>
-                    📅{" "}
-                    {d.date ||
-                      (lang === "si" ? "දිනය නොමැත" : "Date not set")}
-                  </span>
-
-                  <span>
-                    🕒 {d.openTime} {d.closeTime ? `– ${d.closeTime}` : ""}
-                  </span>
-                </div>
-
-                <div className="last-updated">
-                  🔄 {timeAgo(d.updatedAt || d.createdAt, lang)}
-                </div>
-              </Link>
-            );
-          })
+              <div className="card-time">
+                <span>🕒 {p.openTime || "Anytime"}</span>
+                <span>{p.closeTime ? `– ${p.closeTime}` : ""}</span>
+              </div>
+            </Link>
+          ))
         )}
       </div>
 
-      <div className="section-header">
-        <span className="section-title">
-          {lang === "si" ? "සියලු ගැලපෙන දන්සල්" : "All Matching Dansals"}
-        </span>
-
-        <span className="count-badge">
-          {lang === "si"
-            ? `මුළු දන්සල් ${sortedFiltered.length}ක්`
-            : `${sortedFiltered.length} Total`}
-        </span>
-      </div>
-
       <footer className="creator-footer">
-        <strong>Created For People By</strong>
+        <strong>Powered by Zytrix Solution</strong>
         <br />
-        H.D.R.U Anurasiri
-        <br />
-        Undergraduate Software Engineering Student — SLIIT CITY UNI
-        <br />
-        Co-founder of Zytrix
+        Developed by Zytrix Solution Team
       </footer>
     </div>
   );

@@ -1,100 +1,48 @@
-import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
 import { Link } from "react-router-dom";
-import { db } from "../firebase";
-import { getDansalTimeStatus } from "../utils/dansalStatus";
+import { usePlaces } from "../hooks/usePlaces";
+import { PLACE_TYPES } from "../utils/types";
+
+function getTypeLabel(type) {
+  return PLACE_TYPES.find((t) => t.id === type)?.name || type || "Place";
+}
 
 export default function Analytics({ lang = "si" }) {
-  const [dansals, setDansals] = useState([]);
+  const { places, loading } = usePlaces();
 
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, "dansals"), (snapshot) => {
-      const data = snapshot.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .filter((d) => d.hidden !== true);
+  const total = places.length;
+  const open = places.filter((p) => p.status !== "closed").length;
+  const closed = places.filter((p) => p.status === "closed").length;
+  const verified = places.filter((p) => p.verified).length;
+  const withGps = places.filter((p) => p.lat && p.lng).length;
 
-      setDansals(data);
-    });
+  const typeCounts = {};
+  const areaCounts = {};
+  const crowdCounts = {
+    low: 0,
+    medium: 0,
+    high: 0,
+  };
 
-    return () => unsub();
-  }, []);
+  places.forEach((p) => {
+    const type = p.type || "other";
+    const area = p.district || "Unknown";
+    const crowd = p.crowdLevel || "medium";
 
-  const stats = useMemo(() => {
-    const total = dansals.length;
+    typeCounts[type] = (typeCounts[type] || 0) + 1;
+    areaCounts[area] = (areaCounts[area] || 0) + 1;
 
-    const openNow = dansals.filter((d) => {
-      const status = getDansalTimeStatus(d.date, d.openTime, d.closeTime);
-      return status.type === "now";
-    }).length;
+    if (crowdCounts[crowd] !== undefined) {
+      crowdCounts[crowd] += 1;
+    }
+  });
 
-    const comingSoon = dansals.filter((d) => {
-      const status = getDansalTimeStatus(d.date, d.openTime, d.closeTime);
-      return status.type === "soon";
-    }).length;
+  const topTypes = Object.entries(typeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
 
-    const ended = dansals.filter((d) => {
-      const status = getDansalTimeStatus(d.date, d.openTime, d.closeTime);
-      return status.type === "ended";
-    }).length;
-
-    const verified = dansals.filter((d) => d.verified).length;
-    const withGps = dansals.filter((d) => d.lat && d.lng).length;
-
-    const totalQueueVotes = dansals.reduce(
-      (sum, d) => sum + (Number(d.queueVotesCount) || 0),
-      0
-    );
-
-    const totalFinishVotes = dansals.reduce(
-      (sum, d) => sum + (Number(d.finishVotesCount) || 0),
-      0
-    );
-
-    const districtCounts = {};
-    const foodCounts = {};
-    const queueCounts = {
-      no: 0,
-      short: 0,
-      medium: 0,
-      long: 0,
-    };
-
-    dansals.forEach((d) => {
-      if (d.location) {
-        districtCounts[d.location] = (districtCounts[d.location] || 0) + 1;
-      }
-
-      if (d.foodType) {
-        foodCounts[d.foodType] = (foodCounts[d.foodType] || 0) + 1;
-      }
-
-      if (d.queue && queueCounts[d.queue] !== undefined) {
-        queueCounts[d.queue] += 1;
-      }
-    });
-
-    const topDistricts = Object.entries(districtCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
-
-    const topFoods = Object.entries(foodCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
-
-    return {
-      total,
-      openNow,
-      comingSoon,
-      ended,
-      verified,
-      withGps,
-      totalQueueVotes,
-      totalFinishVotes,
-      queueCounts,
-      topDistricts,
-      topFoods,
-    };
-  }, [dansals]);
+  const topAreas = Object.entries(areaCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
 
   return (
     <div className="page active">
@@ -104,118 +52,109 @@ export default function Analytics({ lang = "si" }) {
         </Link>
 
         <div className="form-section-title">
-          📊 {lang === "si" ? "දන්සල් විශ්ලේෂණ" : "Dansal Analytics"}
+          📊 {lang === "si" ? "PoyaDay විශ්ලේෂණ" : "PoyaDay Analytics"}
         </div>
 
         <p className="form-section-desc">
           {lang === "si"
-            ? "සජීවී දන්සල් සංඛ්‍යා ලේඛන සහ ප්‍රජා තොරතුරු."
-            : "Live dansal statistics and community insights."}
+            ? "සජීවී ස්ථාන සංඛ්‍යා ලේඛන සහ ප්‍රජා තොරතුරු."
+            : "Live place statistics and community insights."}
         </p>
 
-        <div className="analytics-grid">
-          <div className="analytics-card">
-            <span>🏮</span>
-            <strong>{stats.total}</strong>
-            <p>{lang === "si" ? "මුළු දන්සල්" : "Total Dansals"}</p>
-          </div>
-
-          <div className="analytics-card">
-            <span>🟢</span>
-            <strong>{stats.openNow}</strong>
-            <p>{lang === "si" ? "දැන් විවෘත" : "Open Now"}</p>
-          </div>
-
-          <div className="analytics-card">
-            <span>🔵</span>
-            <strong>{stats.comingSoon}</strong>
-            <p>{lang === "si" ? "ඉක්මනින්" : "Coming Soon"}</p>
-          </div>
-
-          <div className="analytics-card">
-            <span>🔴</span>
-            <strong>{stats.ended}</strong>
-            <p>{lang === "si" ? "අවසන්" : "Ended"}</p>
-          </div>
-
-          <div className="analytics-card">
-            <span>✅</span>
-            <strong>{stats.verified}</strong>
-            <p>{lang === "si" ? "තහවුරු කළ" : "Verified"}</p>
-          </div>
-
-          <div className="analytics-card">
-            <span>📍</span>
-            <strong>{stats.withGps}</strong>
-            <p>{lang === "si" ? "GPS සහිත" : "With GPS"}</p>
-          </div>
-
-          <div className="analytics-card">
-            <span>👥</span>
-            <strong>{stats.totalQueueVotes}</strong>
-            <p>{lang === "si" ? "පෝලිම් ඡන්ද" : "Queue Votes"}</p>
-          </div>
-
-          <div className="analytics-card">
-            <span>🍽️</span>
-            <strong>{stats.totalFinishVotes}</strong>
-            <p>{lang === "si" ? "ආහාර අවසන් ඡන්ද" : "Food Finish Votes"}</p>
-          </div>
-        </div>
-
-        <div className="analytics-section">
-          <h3>{lang === "si" ? "ජනප්‍රිය දිස්ත්‍රික්ක" : "Top Districts"}</h3>
-
-          {stats.topDistricts.length === 0 ? (
-            <p className="small-note">No data</p>
-          ) : (
-            stats.topDistricts.map(([district, count]) => (
-              <div className="analytics-row" key={district}>
-                <span>{district}</span>
-                <strong>{count}</strong>
+        {loading ? (
+          <div className="empty-state">Loading...</div>
+        ) : (
+          <>
+            <div className="analytics-grid">
+              <div className="analytics-card">
+                <span>📍</span>
+                <strong>{total}</strong>
+                <p>{lang === "si" ? "මුළු ස්ථාන" : "Total Places"}</p>
               </div>
-            ))
-          )}
-        </div>
 
-        <div className="analytics-section">
-          <h3>{lang === "si" ? "ජනප්‍රිය ආහාර වර්ග" : "Top Food Types"}</h3>
-
-          {stats.topFoods.length === 0 ? (
-            <p className="small-note">No data</p>
-          ) : (
-            stats.topFoods.map(([food, count]) => (
-              <div className="analytics-row" key={food}>
-                <span>{food}</span>
-                <strong>{count}</strong>
+              <div className="analytics-card">
+                <span>🟢</span>
+                <strong>{open}</strong>
+                <p>{lang === "si" ? "විවෘත" : "Open"}</p>
               </div>
-            ))
-          )}
-        </div>
 
-        <div className="analytics-section">
-          <h3>{lang === "si" ? "පෝලිම් තත්ත්වය" : "Queue Status Summary"}</h3>
+              <div className="analytics-card">
+                <span>🔴</span>
+                <strong>{closed}</strong>
+                <p>{lang === "si" ? "වසා ඇත" : "Closed"}</p>
+              </div>
 
-          <div className="analytics-row">
-            <span>🟢 {lang === "si" ? "පෝලිම නැහැ" : "No Queue"}</span>
-            <strong>{stats.queueCounts.no}</strong>
-          </div>
+              <div className="analytics-card">
+                <span>✅</span>
+                <strong>{verified}</strong>
+                <p>{lang === "si" ? "තහවුරු කළ" : "Verified"}</p>
+              </div>
 
-          <div className="analytics-row">
-            <span>🟡 {lang === "si" ? "කෙටි පෝලිම" : "Short Queue"}</span>
-            <strong>{stats.queueCounts.short}</strong>
-          </div>
+              <div className="analytics-card">
+                <span>🗺️</span>
+                <strong>{withGps}</strong>
+                <p>{lang === "si" ? "GPS සහිත" : "With GPS"}</p>
+              </div>
 
-          <div className="analytics-row">
-            <span>🟠 {lang === "si" ? "මධ්‍යම" : "Medium"}</span>
-            <strong>{stats.queueCounts.medium}</strong>
-          </div>
+              <div className="analytics-card">
+                <span>👥</span>
+                <strong>
+                  {crowdCounts.low + crowdCounts.medium + crowdCounts.high}
+                </strong>
+                <p>{lang === "si" ? "Crowd data" : "Crowd Data"}</p>
+              </div>
+            </div>
 
-          <div className="analytics-row">
-            <span>🔴 {lang === "si" ? "දිග පෝලිම" : "Long Queue"}</span>
-            <strong>{stats.queueCounts.long}</strong>
-          </div>
-        </div>
+            <div className="analytics-section">
+              <h3>{lang === "si" ? "ජනප්‍රිය වර්ග" : "Top Place Types"}</h3>
+
+              {topTypes.length === 0 ? (
+                <p className="small-note">No data</p>
+              ) : (
+                topTypes.map(([type, count]) => (
+                  <div className="analytics-row" key={type}>
+                    <span>{getTypeLabel(type)}</span>
+                    <strong>{count}</strong>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="analytics-section">
+              <h3>{lang === "si" ? "ජනප්‍රිය ප්‍රදේශ" : "Top Areas"}</h3>
+
+              {topAreas.length === 0 ? (
+                <p className="small-note">No data</p>
+              ) : (
+                topAreas.map(([area, count]) => (
+                  <div className="analytics-row" key={area}>
+                    <span>{area}</span>
+                    <strong>{count}</strong>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="analytics-section">
+              <h3>{lang === "si" ? "Crowd තත්ත්වය" : "Crowd Summary"}</h3>
+
+              <div className="analytics-row">
+                <span>🟢 Low</span>
+                <strong>{crowdCounts.low}</strong>
+              </div>
+
+              <div className="analytics-row">
+                <span>🟠 Medium</span>
+                <strong>{crowdCounts.medium}</strong>
+              </div>
+
+              <div className="analytics-row">
+                <span>🔴 High</span>
+                <strong>{crowdCounts.high}</strong>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

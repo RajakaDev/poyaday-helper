@@ -1,11 +1,11 @@
 export const text = {
   en: {
-    title: "Find Vesak Dansal Near You",
+    title: "Find  Poson Dansal Near You",
     desc: "Check food availability, queue status and location updates in real time.",
     search: "Search area, food, location...",
     live: "Live Dansals",
     found: "found",
-    add: "+ Add Dansal",
+    add: "+ Add Place",
     addTitle: "🏮 Add New Dansal",
     addDesc: "Add correct details so people can quickly find food, queue and location.",
     name: "Dansal Name",
