@@ -101,3 +101,30 @@ select option {
     width: 100%;
   }
 }
+.status-open{
+    background:#1d6f42;
+    color:white;
+    padding:6px 12px;
+    border-radius:999px;
+}
+
+.status-soon{
+    background:#1976d2;
+    color:white;
+    padding:6px 12px;
+    border-radius:999px;
+}
+
+.status-closed{
+    background:#b71c1c;
+    color:white;
+    padding:6px 12px;
+    border-radius:999px;
+}
+
+.status-unknown{
+    background:#666;
+    color:white;
+    padding:6px 12px;
+    border-radius:999px;
+}

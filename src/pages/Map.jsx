@@ -2,169 +2,290 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
+
 import { usePlaces } from "../hooks/usePlaces";
+import { useLocation } from "../hooks/useLocation";
+import { distanceKm } from "../utils/distance";
+import { getPlaceTimeStatus } from "../utils/placeStatus";
 import { PLACE_TYPES } from "../utils/types";
 
-const markerIcon = new L.Icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
+const CENTER_SRI_LANKA = [7.8731, 80.7718];
+
+const ICONS = {
+  dansal: "🍚",
+  temple: "☸️",
+  parking: "🚗",
+  toilet: "🚻",
+  water: "💧",
+  hospital: "🏥",
+  fuel: "⛽",
+  bus: "🚌",
+  railway: "🚆",
+  restaurant: "🍽️",
+  hotel: "🏨",
+  shop: "🛒",
+  pharmacy: "💊",
+  other: "📍",
+};
+
+function makeIcon(type) {
+  const emoji = ICONS[type] || "📍";
+
+  return L.divIcon({
+    className: "emoji-map-marker",
+    html: `<div>${emoji}</div>`,
+    iconSize: [38, 38],
+    iconAnchor: [19, 38],
+    popupAnchor: [0, -36],
+  });
+}
+
+const userIcon = L.divIcon({
+  className: "user-map-marker",
+  html: "<div>🔵</div>",
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
 });
 
-const userIcon = new L.Icon({
-  iconUrl: "https://cdn-icons-png.flaticon.com/512/64/64113.png",
-  iconSize: [28, 28],
-  iconAnchor: [14, 28],
-});
+function FlyToLocation({ location }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (location) {
+      map.flyTo([location.lat, location.lng], 14, { duration: 1 });
+    }
+  }, [location, map]);
+
+  return null;
+}
 
 function getTypeLabel(type) {
   return PLACE_TYPES.find((t) => t.id === type)?.name || "📍 Place";
 }
 
-function RecenterMap({ center, zoom = 13 }) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (center) map.setView(center, zoom);
-  }, [center, zoom, map]);
-
-  return null;
-}
-
-export default function Map({ lang = "si" }) {
+export default function MapPage({ lang = "si" }) {
   const { places, loading } = usePlaces();
+  const { location, loadingLocation, getLocation } = useLocation();
 
-  const [userLocation, setUserLocation] = useState(null);
+  const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [selectedPlace, setSelectedPlace] = useState(null);
 
   const mapPlaces = useMemo(() => {
-    return places.filter((p) => {
-      const hasGps = p.lat && p.lng;
-      const visible = p.hidden !== true;
-      const matchesType = typeFilter === "all" || p.type === typeFilter;
+    return places
+      .filter((p) => p.hidden !== true)
+      .filter((p) => p.lat && p.lng)
+      .map((p) => {
+        const distance =
+          location && p.lat && p.lng
+            ? distanceKm(location.lat, location.lng, Number(p.lat), Number(p.lng))
+            : null;
 
-      return hasGps && visible && matchesType;
-    });
-  }, [places, typeFilter]);
+        return { ...p, distance };
+      })
+      .filter((p) => {
+        const text = `${p.name || ""} ${p.district || ""} ${p.town || ""} ${
+          p.address || ""
+        } ${p.category || ""} ${p.type || ""}`.toLowerCase();
 
-  const showMyLocation = () => {
-    if (!navigator.geolocation) {
-      alert(lang === "si" ? "GPS support නැහැ" : "GPS not supported");
-      return;
-    }
+        const matchesSearch = text.includes(search.toLowerCase());
+        const matchesType = typeFilter === "all" || p.type === typeFilter;
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setUserLocation([pos.coords.latitude, pos.coords.longitude]);
-      },
-      () => {
-        alert(lang === "si" ? "GPS permission දෙන්න" : "Please allow GPS");
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
-  };
+        return matchesSearch && matchesType;
+      })
+      .sort((a, b) => (a.distance ?? 99999) - (b.distance ?? 99999));
+  }, [places, location, search, typeFilter]);
+
+  const selectedStatus = selectedPlace
+    ? getPlaceTimeStatus(selectedPlace.openTime, selectedPlace.closeTime)
+    : null;
+
+  const navigateUrl = selectedPlace
+    ? `https://www.google.com/maps/dir/?api=1&destination=${selectedPlace.lat},${selectedPlace.lng}`
+    : "";
 
   return (
     <div className="page active">
       <div className="add-form">
         <Link className="detail-back" to="/">
-          ← {lang === "si" ? "ආපසු" : "Back"}
+          ← Back
         </Link>
 
-        <div className="form-section-title">
-          🗺️ {lang === "si" ? "PoyaDay සිතියම" : "PoyaDay Map"}
-        </div>
+        <div className="form-section-title">🗺️ Interactive Map</div>
 
         <p className="form-section-desc">
-          {lang === "si"
-            ? "දන්සල්, ජල ස්ථාන, parking, toilets, first aid සහ events සිතියමෙන් බලන්න."
-            : "View dansals, water points, parking, toilets, first aid and events on the map."}
+          Find nearby dansals, temples, toilets, water, parking and hospitals on the map.
         </p>
 
-        <div className="map-actions">
-          <button className="gps-btn" type="button" onClick={showMyLocation}>
-            📍 {lang === "si" ? "මගේ ස්ථානය පෙන්වන්න" : "Show My Location"}
+        <div className="search-wrap">
+          <span className="search-icon">🔍</span>
+          <input
+            className="search-input"
+            placeholder="Search place, town, category..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        <div className="poson-category-row">
+          <button
+            className={`poson-category-chip ${typeFilter === "all" ? "active-chip" : ""}`}
+            onClick={() => setTypeFilter("all")}
+            type="button"
+          >
+            🏛 All
           </button>
 
-          <select
-            className="filter-select"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-          >
-            <option value="all">
-              {lang === "si" ? "සියලු ස්ථාන" : "All Places"}
-            </option>
+          {PLACE_TYPES.map((type) => (
+            <button
+              key={type.id}
+              className={`poson-category-chip ${typeFilter === type.id ? "active-chip" : ""}`}
+              onClick={() => setTypeFilter(type.id)}
+              type="button"
+            >
+              {type.name}
+            </button>
+          ))}
+        </div>
 
-            {PLACE_TYPES.map((type) => (
-              <option key={type.id} value={type.id}>
-                {type.name}
-              </option>
-            ))}
-          </select>
+        <div className="map-actions">
+          <button className="gps-btn" type="button" onClick={getLocation}>
+            📍 {loadingLocation ? "Finding..." : "My Location"}
+          </button>
+
+          <Link className="home-action-btn" to="/add">
+            ➕ Add Place
+          </Link>
         </div>
 
         <p className="small-note">
-          {loading
-            ? "Loading..."
-            : lang === "si"
-            ? `GPS ඇති ස්ථාන ${mapPlaces.length}ක් පෙන්වයි.`
-            : `Showing ${mapPlaces.length} places with GPS.`}
+          Showing {mapPlaces.length} GPS places.
         </p>
       </div>
 
       <div className="map-wrap">
-        <MapContainer
-          center={[8.35, 80.5]}
-          zoom={8}
-          scrollWheelZoom={true}
-          className="leaflet-map"
-        >
-          <TileLayer
-            attribution="&copy; OpenStreetMap contributors"
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+        {loading ? (
+          <div className="empty-state">Loading map places...</div>
+        ) : (
+          <MapContainer
+            center={CENTER_SRI_LANKA}
+            zoom={8}
+            scrollWheelZoom
+            className="leaflet-map"
+          >
+            <TileLayer
+              attribution="&copy; OpenStreetMap contributors"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
 
-          {userLocation && (
-            <>
-              <RecenterMap center={userLocation} zoom={13} />
-              <Marker position={userLocation} icon={userIcon}>
-                <Popup>{lang === "si" ? "ඔබගේ ස්ථානය" : "Your Location"}</Popup>
-              </Marker>
-            </>
-          )}
+            {location && (
+              <>
+                <FlyToLocation location={location} />
+                <Marker position={[location.lat, location.lng]} icon={userIcon}>
+                  <Popup>You are here</Popup>
+                </Marker>
+              </>
+            )}
 
-          {mapPlaces.map((p) => {
-            const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
+            {mapPlaces.map((p) => {
+              const status = getPlaceTimeStatus(p.openTime, p.closeTime);
 
-            return (
-              <Marker
-                key={p.id}
-                position={[Number(p.lat), Number(p.lng)]}
-                icon={markerIcon}
-              >
-                <Popup>
-                  <strong>{getTypeLabel(p.type)} {p.name}</strong>
-                  <br />
-                  🏷️ {p.category || p.type || "Place"}
-                  <br />
-                  📍 {p.district || "-"} {p.town ? `- ${p.town}` : ""}
-                  <br />
-                  👥 Crowd: {p.crowdLevel || "medium"}
-                  <br />
-                  <a href={`/place/${p.id}`}>
-                    {lang === "si" ? "විස්තර බලන්න" : "View Details"}
-                  </a>
-                  <br />
-                  <a href={googleMapsUrl} target="_blank" rel="noreferrer">
-                    🗺️ {lang === "si" ? "Google Maps යන්න" : "Navigate"}
-                  </a>
-                </Popup>
-              </Marker>
-            );
-          })}
-        </MapContainer>
+              return (
+                <Marker
+                  key={p.id}
+                  position={[Number(p.lat), Number(p.lng)]}
+                  icon={makeIcon(p.type)}
+                  eventHandlers={{
+                    click: () => setSelectedPlace(p),
+                  }}
+                >
+                  <Popup>
+                    <strong>{getTypeLabel(p.type)} {p.name}</strong>
+                    <br />
+                    {p.verified ? "✅ Verified" : "🟡 Community"}
+                    <br />
+                    {status.label}
+                    <br />
+                    {p.distance !== null && p.distance !== undefined
+                      ? `📏 ${p.distance.toFixed(1)} km`
+                      : "📍 GPS available"}
+                    <br />
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      🧭 Navigate
+                    </a>
+                    <br />
+                    <a href={`/place/${p.id}`}>📄 View Details</a>
+                  </Popup>
+                </Marker>
+              );
+            })}
+          </MapContainer>
+        )}
       </div>
+
+      {selectedPlace && (
+        <div className="map-bottom-sheet">
+          <button
+            className="map-sheet-close"
+            type="button"
+            onClick={() => setSelectedPlace(null)}
+          >
+            ✕
+          </button>
+
+          <div className="card-name">
+            {getTypeLabel(selectedPlace.type)} {selectedPlace.name}
+          </div>
+
+          <div className="card-loc">
+            📍 {selectedPlace.district || "-"}{" "}
+            {selectedPlace.town ? `- ${selectedPlace.town}` : ""}
+          </div>
+
+          <div className="card-exact">{selectedPlace.address || ""}</div>
+
+          <div className="card-tags">
+            <span className={`status-${selectedStatus.type}`}>
+              {selectedStatus.label}
+            </span>
+
+            <span className="tag">
+              {selectedPlace.verified ? "✅ Verified" : "🟡 Community"}
+            </span>
+
+            {selectedPlace.distance !== null && selectedPlace.distance !== undefined && (
+              <span className="tag">📏 {selectedPlace.distance.toFixed(1)} km</span>
+            )}
+
+            <span className="tag">👥 {selectedPlace.crowdLevel || "medium"}</span>
+          </div>
+
+          <div className="card-time">
+            <span>🕒 Opens: {selectedPlace.openTime || "Anytime"}</span>
+            <span>Closes: {selectedPlace.closeTime || "-"}</span>
+            <span>⏳ {selectedStatus.message}</span>
+          </div>
+
+          <div className="home-action-row">
+            <a
+              className="home-action-btn"
+              href={navigateUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              🧭 Navigate
+            </a>
+
+            <Link className="home-action-btn" to={`/place/${selectedPlace.id}`}>
+              📄 Details
+            </Link>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

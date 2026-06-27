@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import PromotionCard from "../components/PromotionCard";
+
 import SponsorBanner from "../components/SponsorBanner";
 import SponsorNativeCard from "../components/SponsorNativeCard";
+
 import { useLocation } from "../hooks/useLocation";
 import { usePlaces } from "../hooks/usePlaces";
-import { listenActivePromotions } from "../services/promotionService";
+
 import { distanceKm } from "../utils/distance";
+import { getPlaceTimeStatus } from "../utils/placeStatus";
 import { PLACE_TYPES } from "../utils/types";
 
 function getTypeLabel(type) {
@@ -21,12 +23,6 @@ export default function Home({ lang = "si" }) {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [nearbyOnly, setNearbyOnly] = useState(false);
-  const [promotions, setPromotions] = useState([]);
-
-  useEffect(() => {
-    const unsub = listenActivePromotions(setPromotions);
-    return () => unsub();
-  }, []);
 
   useEffect(() => {
     const goOnline = () => setOnline(true);
@@ -59,11 +55,11 @@ export default function Home({ lang = "si" }) {
 
         const matchesSearch = text.includes(search.toLowerCase());
         const matchesType = typeFilter === "all" || p.type === typeFilter;
-        const matchesNearby = !nearbyOnly || (p.distance !== null && p.distance <= 10);
+        const matchesNearby =
+          !nearbyOnly || (p.distance !== null && p.distance <= 10);
 
         return matchesSearch && matchesType && matchesNearby;
       })
-      .filter((p) => p.status !== "closed")
       .sort((a, b) => {
         if (!location) return 0;
         return (a.distance ?? 99999) - (b.distance ?? 99999);
@@ -81,7 +77,9 @@ export default function Home({ lang = "si" }) {
         <div className="hero-badge">🌕 PoyaDay Helper</div>
 
         <h1 className="hero-title">
-          {lang === "si" ? "ඔබ අසල වැදගත් ස්ථාන සොයන්න" : "Find useful places near you"}
+          {lang === "si"
+            ? "ඔබ අසල වැදගත් ස්ථාන සොයන්න"
+            : "Find useful places near you"}
         </h1>
 
         <p className="hero-desc">
@@ -105,7 +103,11 @@ export default function Home({ lang = "si" }) {
         </div>
 
         <div className="home-primary-actions">
-          <button className="home-action-btn primary-action" type="button" onClick={handleNearby}>
+          <button
+            className="home-action-btn primary-action"
+            type="button"
+            onClick={handleNearby}
+          >
             📍 {loadingLocation ? "Finding..." : lang === "si" ? "මා අසල" : "Nearby"}
           </button>
 
@@ -123,36 +125,60 @@ export default function Home({ lang = "si" }) {
         </div>
 
         {nearbyOnly && (
-          <button className="clear-gps-btn" type="button" onClick={() => setNearbyOnly(false)}>
+          <button
+            className="clear-gps-btn"
+            type="button"
+            onClick={() => setNearbyOnly(false)}
+          >
             ✕ {lang === "si" ? "Nearby ඉවත් කරන්න" : "Clear Nearby"}
           </button>
         )}
       </section>
 
       <div className="quick-grid">
-        <Link to="/add" className="quick-card">➕ <span>Add Place</span></Link>
-        <Link to="/add-event" className="quick-card">🏮 <span>Add Event</span></Link>
-        <Link to="/route" className="quick-card">🧭 <span>Route</span></Link>
-        <Link to="/lost-found" className="quick-card">🔍 <span>Lost & Found</span></Link>
-        <Link to="/road-alerts" className="quick-card">🚧 <span>Roads</span></Link>
-        <Link to="/feed" className="quick-card">📢 <span>Feed</span></Link>
-        <Link to="/events" className="quick-card">🌕 <span>Events</span></Link>
-        <Link to="/about" className="quick-card">ℹ️ <span>About</span></Link>
+        <Link to="/add" className="quick-card">
+          ➕ <span>Add Place</span>
+        </Link>
+        <Link to="/add-event" className="quick-card">
+          🏮 <span>Add Event</span>
+        </Link>
+        <Link to="/route" className="quick-card">
+          🧭 <span>Route</span>
+        </Link>
+        <Link to="/lost-found" className="quick-card">
+          🔍 <span>Lost & Found</span>
+        </Link>
+        <Link to="/road-alerts" className="quick-card">
+          🚧 <span>Roads</span>
+        </Link>
+        <Link to="/feed" className="quick-card">
+          📢 <span>Feed</span>
+        </Link>
+        <Link to="/events" className="quick-card">
+          🌕 <span>Events</span>
+        </Link>
+        <Link to="/about" className="quick-card">
+          ℹ️ <span>About</span>
+        </Link>
       </div>
 
       <div className="poson-category-row home-category-row">
         <button
-          className={`poson-category-chip ${typeFilter === "all" ? "active-chip" : ""}`}
+          className={`poson-category-chip ${
+            typeFilter === "all" ? "active-chip" : ""
+          }`}
           onClick={() => setTypeFilter("all")}
           type="button"
         >
-          🗺️ All
+          🏛 All
         </button>
 
         {PLACE_TYPES.map((type) => (
           <button
             key={type.id}
-            className={`poson-category-chip ${typeFilter === type.id ? "active-chip" : ""}`}
+            className={`poson-category-chip ${
+              typeFilter === type.id ? "active-chip" : ""
+            }`}
             onClick={() => setTypeFilter(type.id)}
             type="button"
           >
@@ -176,22 +202,8 @@ export default function Home({ lang = "si" }) {
             : "Details are added by the public, so please verify before visiting."}
         </p>
       </div>
+
       <SponsorBanner />
-
-      {promotions.length > 0 && (
-        <section className="promo-section">
-          <div className="section-header">
-            <span className="section-title">⭐ Sponsored</span>
-            <span className="count-badge">{Math.min(promotions.length, 2)}</span>
-          </div>
-
-          <div className="promo-grid">
-            {promotions.slice(0, 2).map((promo) => (
-              <PromotionCard key={promo.id} promotion={promo} />
-            ))}
-          </div>
-        </section>
-      )}
 
       <div className="section-header">
         <span className="section-title">
@@ -200,74 +212,79 @@ export default function Home({ lang = "si" }) {
               ? "මා අසල ස්ථාන"
               : "Nearby Places"
             : lang === "si"
-            ? "විවෘත / සජීවී ස්ථාන"
-            : "Open / Live Places"}
+            ? "සජීවී ස්ථාන"
+            : "Live Places"}
         </span>
 
         <span className="count-badge">{visiblePlaces.length}</span>
       </div>
 
       <div className="cards">
-  {loading ? (
-    <div className="empty-state">Loading...</div>
-  ) : visiblePlaces.length === 0 ? (
-    <div className="empty-state">
-      {nearbyOnly ? "No places found within 10km." : "No places found."}
-    </div>
-  ) : (
-    visiblePlaces.map((p, index) => (
-      <div key={p.id} className="card-wrap">
-        {index === 3 && <SponsorNativeCard />}
+        {loading ? (
+          <div className="empty-state">Loading...</div>
+        ) : visiblePlaces.length === 0 ? (
+          <div className="empty-state">
+            {nearbyOnly ? "No places found within 10km." : "No places found."}
+          </div>
+        ) : (
+          visiblePlaces.map((p, index) => {
+            const timeStatus = getPlaceTimeStatus(p.openTime, p.closeTime);
 
-        <Link to={`/place/${p.id}`} className="dansal-card">
-          <div className="card-top">
-            <div>
-              <div className="card-name">
-                {getTypeLabel(p.type)} {p.name}
-                {p.verified && (
-                  <span className="verified-badge">✅ Verified</span>
-                )}
+            return (
+              <div key={p.id} className="card-wrap">
+                {index === 3 && <SponsorNativeCard />}
+
+                <Link to={`/place/${p.id}`} className="dansal-card">
+                  <div className="card-top">
+                    <div>
+                      <div className="card-name">
+                        {getTypeLabel(p.type)} {p.name}
+                        {p.verified && (
+                          <span className="verified-badge">✅ Verified</span>
+                        )}
+                      </div>
+
+                      <div className="card-loc">
+                        📍 {p.district || "-"} {p.town ? `- ${p.town}` : ""}
+                      </div>
+
+                      <div className="card-exact">{p.address || ""}</div>
+                    </div>
+
+                    <span className={`status-${timeStatus.type}`}>
+                      {timeStatus.label}
+                    </span>
+                  </div>
+
+                  <div className="card-tags">
+                    <span className="tag tag-food">
+                      🏷️ {p.category || p.type || "place"}
+                    </span>
+
+                    <span className="tag tag-food">
+                      👥 {p.crowdLevel || "medium"}
+                    </span>
+
+                    {p.lat && p.lng && <span className="tag tag-food">📍 GPS</span>}
+
+                    {p.distance !== null && p.distance !== undefined && (
+                      <span className="tag tag-food">
+                        📏 {p.distance.toFixed(1)} km
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="card-time">
+                    <span>🕒 Opens: {p.openTime || "Anytime"}</span>
+                    <span>Closes: {p.closeTime || "-"}</span>
+                    <span>⏳ {timeStatus.message}</span>
+                  </div>
+                </Link>
               </div>
-
-              <div className="card-loc">
-                📍 {p.district || "-"} {p.town ? `- ${p.town}` : ""}
-              </div>
-
-              <div className="card-exact">{p.address || ""}</div>
-            </div>
-
-            <span className={`status-${p.status || "open"}`}>
-              {p.status || "open"}
-            </span>
-          </div>
-
-          <div className="card-tags">
-            <span className="tag tag-food">
-              🏷️ {p.category || p.type || "place"}
-            </span>
-
-            <span className="tag tag-food">
-              👥 {p.crowdLevel || "medium"}
-            </span>
-
-            {p.lat && p.lng && <span className="tag tag-food">📍 GPS</span>}
-
-            {p.distance !== null && p.distance !== undefined && (
-              <span className="tag tag-food">
-                📏 {p.distance.toFixed(1)} km
-              </span>
-            )}
-          </div>
-
-          <div className="card-time">
-            <span>🕒 {p.openTime || "Anytime"}</span>
-            <span>{p.closeTime ? `– ${p.closeTime}` : ""}</span>
-          </div>
-        </Link>
+            );
+          })
+        )}
       </div>
-    ))
-  )}
-</div>
 
       <footer className="creator-footer">
         <strong>Powered by Zytrix Solution</strong>
